@@ -1,2 +1,35 @@
 # backend/Dockerfile_backend
 FROM python:3.9-slim
+# Đặt thư mục làm việc bên trong container
+WORKDIR /app
+
+# Thiết lập Múi giờ thành UTC cho nhất quán
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Ngăn Python tạo buffer cho stdout và stderr (giúp log hiển thị ngay)
+ENV PYTHONUNBUFFERED 1
+
+# Nâng cấp pip
+RUN pip install --upgrade pip
+
+# Sao chép file requirements.txt vào thư mục làm việc
+COPY ./requirements.txt .
+
+# Cài đặt các thư viện cần thiết từ requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Sao chép toàn bộ nội dung của thư mục ./app (chứa code FastAPI) 
+# vào thư mục làm việc /app bên trong container
+COPY ./app .
+
+# Mở cổng mà ứng dụng FastAPI sẽ chạy (Uvicorn mặc định chạy ở cổng 8000)
+EXPOSE 8000
+
+# Lệnh để chạy máy chủ Uvicorn khi container khởi động
+# main:app -> module là main (từ file main.py), instance FastAPI tên là app
+# --host 0.0.0.0 để server có thể truy cập từ bên ngoài container
+# --port 8000 để Uvicorn chạy ở cổng 8000
+# Bạn có thể thêm --reload ở đây trong quá trình phát triển để server tự khởi động lại khi có thay đổi code
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
