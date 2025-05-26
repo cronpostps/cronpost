@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi"> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CronPost - Gửi Thông Điệp Vượt Thời Gian</title>
+    <link rel="stylesheet" href="css/style.css">
+    </head>
+<body class="theme-dark"> <header id="main-header">
+        <div class="container">
+            <div class="logo-area">
+                <a href="/" class="project-name">CronPost</a>
+            </div>
+            <nav id="main-nav">
+                <ul>
+                    <li><a href="#pricing">Plan (Pricing)</a></li>
+                    <li>
+                        <select id="language-selector" aria-label="Chọn ngôn ngữ">
+                            <option value="vi">Tiếng Việt</option>
+                            <option value="en">English</option>
+                        </select>
+                    </li>
+                    <li><a href="/signin">Sign In</a></li>
+                    <li><a href="/signup" class="cta-button-nav">Sign Up</a></li>
+                    </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section id="hero" class="hero-section">
+            <div class="container text-center">
+                <h1>CronPost: Gửi Thông Điệp Vượt Thời Gian.</h1>
+                <p class="subtitle">
+                    CronPost giúp bạn cài đặt trước các email và tin nhắn Telegram quan trọng. [cite: 3, 172]
+                    Hệ thống sẽ tự động gửi chúng đến người thân yêu khi bạn không còn tương tác, [cite: 4, 173]
+                    đảm bảo lời nhắn của bạn luôn được chuyển đi đúng lúc.
+                </p>
+                <a href="/signup" class="cta-button-main">Bắt Đầu Ngay</a>
+            </div>
+        </section>
+
+        <section id="how-it-works" class="how-it-works-section">
+            <div class="container">
+                <h2 class="section-title text-center">CronPost Hoạt Động Như Thế Nào?</h2>
+                <div class="steps-container">
+                    <div class="step">
+                        <div class="step-icon">&gt;_</div>
+                        <h3>1. Soạn Thảo & Cài Đặt</h3>
+                        <p>Viết nội dung thông điệp, chọn người nhận (email bắt buộc, Telegram tùy chọn) [cite: 10, 179] và thiết lập lịch trình "check-in" mong muốn của bạn.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-icon">#</div>
+                        <h3>2. Hệ Thống Theo Dõi</h3>
+                        <p>CronPost sẽ bắt đầu theo dõi lịch "check-in" của bạn. Bạn chỉ cần "điểm danh" định kỳ để xác nhận vẫn đang hoạt động.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-icon">!</div>
+                        <h3>3. Không Còn Tương Tác?</h3>
+                        <p>Nếu bạn không "check-in" theo lịch trình đã đặt sau các lần nhắc, hệ thống sẽ hiểu rằng bạn không còn khả năng tương tác.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-icon">$</div>
+                        <h3>4. Thông Điệp Được Gửi</h3>
+                        <p>Thông điệp của bạn sẽ tự động được gửi đến người nhận theo đúng những gì bạn đã thiết lập từ trước. [cite: 4, 173]</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="user-stories" class="user-stories-section">
+            <div class="container">
+                <h2 class="section-title text-center">Những Gì CronPost Có Thể Làm Cho Bạn</h2>
+                <div class="stories-container">
+                    <div class="story">
+                        <p>"Gửi lời chúc mừng sinh nhật cho con cháu khi mình không còn nữa." [cite: 2, 171]</p>
+                    </div>
+                    <div class="story">
+                        <p>"Đảm bảo những tài liệu quan trọng được chuyển giao an toàn nếu có bất trắc xảy ra." [cite: 1, 170]</p>
+                    </div>
+                    <div class="story">
+                        <p>"Để lại những lời nhắn nhủ, dặn dò cho tương lai, hoặc đơn giản là tạo một bất ngờ thú vị!" [cite: 3, 172]</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="final-cta" class="final-cta-section text-center">
+            <div class="container">
+                <h2>Sẵn Sàng Để Lại Dấu Ấn Của Bạn?</h2>
+                <p>Bắt đầu với CronPost ngay hôm nay và an tâm rằng những điều quan trọng sẽ luôn được sẻ chia.</p>
+                <a href="/signup" class="cta-button-main">Đăng Ký Miễn Phí</a>
+            </div>
+        </section>
+    </main>
+
+    <footer id="main-footer">
+        <div class="container">
+            <div class="footer-left">
+                <span>&copy; <span id="current-year"></span> CronPost. All Rights Reserved.</span>
+            </div>
+            <div class="footer-nav">
+                <ul>
+                    <li><a href="/terms">Terms</a></li>
+                    <li><a href="/privacy">Privacy Policy</a></li>
+                    <li><a href="/tips">Tips</a></li>
+                    <li><a href="/about">About Us</a></li>
+                </ul>
+            </div>
+            <div class="footer-theme-selector">
+                <label for="theme-dropdown">Giao diện:</label>
+                <select id="theme-dropdown">
+                    <option value="theme-dark">Tối (Dark)</option>
+                    <option value="theme-light">Sáng (Light)</option>
+                    </select>
+            </div>
+            </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

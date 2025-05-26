@@ -1,0 +1,61 @@
+version: '3.8' # Phiên bản của Docker Compose syntax
+
+services:
+  # Dịch vụ Frontend sử dụng Nginx
+  frontend_nginx:
+    image: nginx:alpine # Sử dụng image Nginx chính thức, phiên bản alpine cho nhẹ
+    container_name: cronpost_nginx
+    ports:
+      - "80:80" # Ánh xạ cổng 80 của máy host vào cổng 80 của container Nginx
+                # Nếu cổng 80 trên máy host của bạn đang được dùng, bạn có thể đổi thành "8080:80"
+                # và truy cập website bằng http://localhost:8080
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro # Mount thư mục frontend vào thư mục web root của Nginx (chỉ đọc)
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro # Mount file cấu hình Nginx tùy chỉnh (chỉ đọc)
+    depends_on:
+      - backend_python # Đảm bảo backend khởi động trước nginx nếu nginx cần proxy_pass ngay
+                       # Tạm thời có thể chưa cần thiết nếu chỉ serve static files
+    networks:
+      - cronpost_network
+
+  # Dịch vụ Backend Python (FastAPI) - Sẽ cấu hình chi tiết sau
+  backend_python:
+    build:
+      context: ./backend # Đường dẫn đến thư mục chứa Dockerfile_backend
+      dockerfile: Dockerfile_backend
+    container_name: cronpost_backend
+    # ports: # Chúng ta sẽ không map port trực tiếp ra host mà qua Nginx
+    #   - "8000:8000" 
+    volumes:
+      - ./backend/app:/app # Mount code backend vào container để live reload khi phát triển (nếu uvicorn có --reload)
+    environment:
+      # Các biến môi trường cho backend sẽ được thêm ở đây (ví dụ: Supabase URL, Supabase Key)
+      - PYTHONUNBUFFERED=1 # Đảm bảo output của Python không bị buffer, dễ debug
+    networks:
+      - cronpost_network
+    # depends_on: # Nếu backend cần database chạy trước (ví dụ Postgres chạy local)
+      # - database_service 
+
+  # Dịch vụ n8n (Sẽ cấu hình chi tiết sau)
+  n8n_service:
+    image: n8nio/n8n
+    container_name: cronpost_n8n
+    ports:
+      - "5678:5678" # Cổng mặc định của n8n
+    volumes:
+      - ./n8n_data:/home/node/.n8n # Mount volume để lưu trữ dữ liệu của n8n
+    environment:
+      - GENERIC_TIMEZONE=UTC # Đặt múi giờ cho n8n
+      - N8N_SECURE_COOKIE=false  # <--- Thêm dòng này
+      # Các biến môi trường khác cho n8n nếu cần
+    networks:
+      - cronpost_network
+
+# Định nghĩa network chung cho các services
+networks:
+  cronpost_network:
+    driver: bridge
+
+# (Tùy chọn) Định nghĩa volumes nếu cần quản lý tập trung
+# volumes:
+#   n8n_data_volume:
