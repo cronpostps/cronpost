@@ -1,212 +1,678 @@
- <style>
-        /* CSS cơ bản cho phong cách retro CLI và theme sẽ được thêm sau */
-        body {
-            font-family: 'Courier New', Courier, monospace; /* Gợi ý font retro */
-            margin: 0;
-            padding: 0;
-            /* Màu sắc sẽ được điều khiển bởi class theme */
-        }
+/* frontend/css/style.css */
+/* CronPost Custom Styles - Overriding and new styles - v4 (Comprehensive Review) */
 
-        .container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px 0;
-        }
+/* -------------------------------------------------------------------------- */
+/* 1. Global Resets & Base Styles
+/* -------------------------------------------------------------------------- */
+body {
+    font-family: 'Courier New', Courier, monospace;
+    margin: 0;
+    padding: 0 !important; /* Override template body padding */
+    line-height: 1.6;
+    font-size: 16px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
 
-        /* Header Styles */
-        header {
-            padding: 15px 0;
-            border-bottom: 1px solid; /* Đường viền cho phong cách CLI */
-        }
+/* Hide template's fixed border decorations */
+body > span[class*="border-"],
+body > span[class*="shape-"] {
+    display: none !important;
+}
 
-        header .container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo-area {
-            display: flex;
-            align-items: center;
-        }
-
-        .logo-area img { /* Giả sử bạn có file ảnh logo */
-            height: 40px; /* Điều chỉnh kích thước nếu cần */
-            margin-right: 10px;
-        }
-
-        .logo-area .project-name {
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-
-        nav ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-        }
-
-        nav ul li {
-            margin-left: 20px;
-        }
-
-        nav ul li a {
-            text-decoration: none;
-            font-size: 1em;
-        }
-
-        /* Hero Section Styles */
-        .hero-section {
-            text-align: center;
-            padding: 60px 20px;
-            border-bottom: 1px solid;
-        }
-
-        .hero-section h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-        }
-
-        .hero-section p {
-            font-size: 1.2em;
-            margin-bottom: 30px;
-            line-height: 1.6;
-        }
-
-        .cta-button {
-            padding: 10px 25px;
-            text-decoration: none;
-            border: 1px solid;
-            border-radius: 3px; /* Bo tròn nhẹ cho cảm giác retro-modern */
-            font-size: 1.1em;
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        /* How It Works / User Story Section Styles */
-        .how-it-works {
-            padding: 40px 20px;
-            border-bottom: 1px solid;
-        }
-
-        .how-it-works h2 {
-            text-align: center;
-            font-size: 2em;
-            margin-bottom: 30px;
-        }
-
-        .steps {
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap; /* Cho responsive */
-        }
-
-        .step {
-            width: 200px; /* Điều chỉnh nếu cần */
-            text-align: center;
-            margin: 15px;
-        }
-
-        .step .step-icon { /* Placeholder cho icon */
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        
-        .step p {
-            font-size: 1em;
-        }
-
-        /* Footer Styles */
-        footer {
-            padding: 30px 0;
-            border-top: 1px solid;
-            font-size: 0.9em;
-        }
-        
-        footer .container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .footer-links {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-        }
-
-        .footer-links li {
-            margin-right: 15px;
-        }
-
-        .footer-links li a {
-            text-decoration: none;
-        }
-
-        .theme-selector label {
-            margin-right: 5px;
-        }
-        
-        /* Basic Theme Colors (Dark Theme by default) */
-        body.theme-dark {
-            background-color: #1a1a1a; /* Màu đen/xám rất đậm */
-            color: #f0f0f0; /* Màu trắng ngà */
-        }
-        header.theme-dark, .hero-section.theme-dark, .how-it-works.theme-dark, footer.theme-dark {
-            border-color: #444; /* Đường viền cho theme tối */
-        }
-        .logo-area .project-name.theme-dark, nav ul li a.theme-dark {
-            color: #f0f0f0;
-        }
-        .hero-section h1.theme-dark {
-            color: #ffa500; /* Màu cam cho tiêu đề chính */
-        }
-        .cta-button.theme-dark {
-            color: #ffa500;
-            border-color: #ffa500;
-        }
-        .cta-button.theme-dark:hover {
-            background-color: #ffa500;
-            color: #1a1a1a;
-        }
-        .footer-links li a.theme-dark, .theme-selector label.theme-dark {
-            color: #aaa;
-        }
-         .footer-links li a.theme-dark:hover {
-            color: #f0f0f0;
-        }
+.container { /* Using Bootstrap's .container for consistency */
+    width: 100%; /* Allow Bootstrap to control this */
+    padding-right: 15px; /* Bootstrap default */
+    padding-left: 15px; /* Bootstrap default */
+    margin-right: auto; /* Bootstrap default */
+    margin-left: auto; /* Bootstrap default */
+}
+@media (min-width: 768px) { .container { width: 750px; } }
+@media (min-width: 992px) { .container { width: 970px; } }
+@media (min-width: 1200px) { .container { width: 1140px; } }
 
 
-        /* Light Theme Colors */
-        body.theme-light {
-            background-color: #f8f9fa; /* Màu trắng / xám rất nhạt */
-            color: #212529; /* Màu đen / xám đậm cho chữ */
-        }
-        header.theme-light, .hero-section.theme-light, .how-it-works.theme-light, footer.theme-light {
-            border-color: #ccc; /* Đường viền cho theme sáng */
-        }
-        .logo-area .project-name.theme-light, nav ul li a.theme-light {
-            color: #212529;
-        }
-        .hero-section h1.theme-light {
-            color: #ff8c00; /* Màu cam cho tiêu đề chính */
-        }
-        .cta-button.theme-light {
-            color: #ff8c00;
-            border-color: #ff8c00;
-        }
-         .cta-button.theme-light:hover {
-            background-color: #ff8c00;
-            color: #f8f9fa;
-        }
-        .footer-links li a.theme-light, .theme-selector label.theme-light {
-            color: #555;
-        }
-        .footer-links li a.theme-light:hover {
-            color: #000;
-        }
+a {
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
 
-    </style>
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Courier New', Courier, monospace;
+    text-transform: none;
+    font-weight: bold;
+    margin-top: 0;
+    margin-bottom: 0.75em;
+}
+
+/* General section padding */
+.cronpost-section {
+    padding: 50px 0;
+}
+
+.section-title {
+    font-size: 2em;
+    margin-bottom: 40px;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. Theme Definitions
+/* -------------------------------------------------------------------------- */
+
+/* ----- Dark Theme (Default) ----- */
+body.theme-dark {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+body.theme-dark header.site-header .header-wrapper,
+body.theme-dark .section-divider,
+body.theme-dark footer.site-footer {
+    border-color: #333333 !important;
+}
+
+body.theme-dark a {
+    color: #ffa500;
+}
+body.theme-dark a:hover {
+    color: #ffc966;
+}
+
+body.theme-dark .site-branding h1 a {
+    color: #e0e0e0 !important;
+}
+body.theme-dark .site-branding h1 a:hover {
+    color: #ffa500 !important;
+}
+
+body.theme-dark nav.main-navigation ul.main-menu > li > a,
+body.theme-dark nav.menu-responsive ul.main-menu > li > a {
+    color: #c0c0c0;
+}
+body.theme-dark nav.main-navigation ul.main-menu > li > a:hover,
+body.theme-dark nav.menu-responsive ul.main-menu > li > a:hover {
+    color: #ffa500;
+}
+
+body.theme-dark .cta-button-nav,
+body.theme-dark .cta-button-main {
+    color: #121212 !important;
+    background-color: #ffa500;
+    border: 1px solid #ffa500;
+    padding: 8px 15px;
+    border-radius: 3px;
+    font-weight: bold;
+    display: inline-block;
+}
+body.theme-dark .cta-button-nav:hover,
+body.theme-dark .cta-button-main:hover {
+    background-color: #dd8c00;
+    border-color: #dd8c00;
+    color: #121212 !important;
+}
+
+body.theme-dark .hero-section h1, 
+body.theme-dark .hero-section h2.welcome-title {
+    color: #ffa500;
+}
+
+body.theme-dark .section-title, body.theme-dark h2 {
+    color: #e0e0e0;
+}
+
+body.theme-dark .step .step-icon {
+    color: #ffa500;
+}
+
+body.theme-dark nav#nav ul.dropdown-menu,
+body.theme-dark nav.menu-responsive ul.dropdown-menu {
+    background-color: #2a2a2a;
+    border: 1px solid #333333;
+}
+body.theme-dark nav#nav ul.dropdown-menu > li > a,
+body.theme-dark nav.menu-responsive ul.dropdown-menu > li > a {
+    color: #c0c0c0;
+}
+body.theme-dark nav#nav ul.dropdown-menu > li > a:hover,
+body.theme-dark nav.menu-responsive ul.dropdown-menu > li > a:hover {
+    background-color: #ffa500;
+    color: #121212 !important;
+}
+
+/* ----- Light Theme ----- */
+body.theme-light {
+    background-color: #f0f0f0;
+    color: #1c1c1c;
+}
+
+body.theme-light header.site-header .header-wrapper,
+body.theme-light .section-divider,
+body.theme-light footer.site-footer {
+    border-color: #cccccc !important;
+}
+
+body.theme-light a {
+    color: #d96c00;
+}
+body.theme-light a:hover {
+    color: #b85a00;
+}
+
+body.theme-light .site-branding h1 a {
+    color: #1c1c1c !important;
+}
+body.theme-light .site-branding h1 a:hover {
+    color: #d96c00 !important;
+}
+
+body.theme-light nav.main-navigation ul.main-menu > li > a,
+body.theme-light nav.menu-responsive ul.main-menu > li > a {
+    color: #333333;
+}
+body.theme-light nav.main-navigation ul.main-menu > li > a:hover,
+body.theme-light nav.menu-responsive ul.main-menu > li > a:hover {
+    color: #d96c00;
+}
+
+body.theme-light .cta-button-nav,
+body.theme-light .cta-button-main {
+    color: #f0f0f0 !important;
+    background-color: #d96c00;
+    border: 1px solid #d96c00;
+    padding: 8px 15px;
+    border-radius: 3px;
+    font-weight: bold;
+    display: inline-block;
+}
+body.theme-light .cta-button-nav:hover,
+body.theme-light .cta-button-main:hover {
+    background-color: #b85a00;
+    border-color: #b85a00;
+    color: #f0f0f0 !important;
+}
+
+body.theme-light .hero-section h1, 
+body.theme-light .hero-section h2.welcome-title {
+    color: #d96c00;
+}
+
+body.theme-light .section-title, body.theme-light h2 {
+    color: #1c1c1c;
+}
+
+body.theme-light .step .step-icon {
+    color: #d96c00;
+}
+
+body.theme-light nav#nav ul.dropdown-menu,
+body.theme-light nav.menu-responsive ul.dropdown-menu {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+}
+body.theme-light nav#nav ul.dropdown-menu > li > a,
+body.theme-light nav.menu-responsive ul.dropdown-menu > li > a {
+    color: #333333;
+}
+body.theme-light nav#nav ul.dropdown-menu > li > a:hover,
+body.theme-light nav.menu-responsive ul.dropdown-menu > li > a:hover {
+    background-color: #d96c00;
+    color: #f0f0f0 !important;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* 3. Header Styles - Tinh chỉnh lại theo cấu trúc Bootstrap
+/* -------------------------------------------------------------------------- */
+
+/* Ghi đè style của template cho .site-header */
+header.site-header { /* class="site-header container" trong HTML của bạn */
+    margin-bottom: 0 !important;
+    padding-top: 0 !important; /* Để .header-wrapper kiểm soát padding trên */
+    padding-bottom: 0 !important; /* Để .header-wrapper kiểm soát padding dưới và border */
+    animation: none !important;
+    border: none !important; /* Bỏ border của .site-header, .header-wrapper sẽ có border */
+    /* Để .container của Bootstrap tự xử lý width và căn giữa */
+}
+
+header.site-header .header-wrapper {
+    padding: 15px 0; /* Padding trên dưới cho nội dung thực tế của header */
+                     /* Bạn có thể điều chỉnh 15px này cho phù hợp */
+    border-bottom-width: 1px !important;
+    border-bottom-style: solid !important;
+    width: 100%; /* header-wrapper sẽ chiếm 100% chiều rộng của .site-header (là .container) */
+    /* border-color sẽ được theme quản lý */
+    box-sizing: border-box;
+}
+
+/* .row bên trong .header-wrapper (và nằm trong .container của thẻ header) */
+/* Bootstrap đã có style cho .row và .col-md-*, chúng ta chỉ tinh chỉnh nếu cần */
+header.site-header .row {
+    display: flex;
+    align-items: center; /* Căn các cột theo chiều dọc */
+    /* margin-left: 0;  Để Bootstrap .row tự xử lý margin âm nếu cần */
+    /* margin-right: 0; */
+}
+
+/* Khối logo bên trái */
+header.site-header .col-md-4 { /* class .col-md-4 từ HTML của bạn */
+   display: flex;
+   align-items: center;
+}
+
+/* Khối navigation bên phải */
+header.site-header .col-md-8 { /* class .col-md-8 từ HTML của bạn */
+    display: flex;
+    justify-content: flex-end; /* Đẩy menu sang phải */
+    align-items: center;
+}
+
+.logo-area {
+    display: flex;
+    align-items: center;
+}
+.logo-area h1 { /* Nhắm trực tiếp vào h1 trong .site-branding của template */
+    font-family: 'Courier New', Courier, monospace !important; /* Ghi đè font từ templatemo_style.css */
+    font-size: 1.8em !important; /* Điều chỉnh kích thước nếu cần */
+    font-weight: bold !important;
+    text-transform: none !important; /* Bỏ uppercase nếu có */
+    margin: 0; /* Reset margin của H1 */
+    /* Màu chữ của link trong h1 sẽ do theme quản lý */
+}
+.logo-area img {
+    height: 30px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* Menu điều hướng */
+nav#nav {
+    /* Không cần set width 100% ở đây vì .col-md-8 đã làm nhiệm vụ đó */
+}
+
+nav.main-navigation ul.main-menu {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+}
+nav.main-navigation ul.main-menu > li {
+    margin-left: 15px;
+}
+nav.main-navigation ul.main-menu > li:first-child {
+    margin-left: 0;
+}
+nav.main-navigation ul.main-menu > li > a {
+    padding: 10px 12px;
+    font-size: 0.9em; /* Giảm nhẹ font size menu */
+    text-transform: uppercase; /* Giữ từ template nếu muốn */
+    font-family: 'Courier New', Courier, monospace !important; /* Ghi đè font từ templatemo_style.css */
+    font-weight: normal !important; /* Ghi đè font-weight nếu templatemo_style.css có đặt */
+}
+
+/* Dropdown Language Menu Item Styling - Đã hoạt động đúng */
+nav#nav ul.main-menu li.dropdown ul.dropdown-menu,
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu {
+    min-width: auto;
+    padding: 5px 0;
+    margin: 2px 0 0;
+    font-size: 13px; /* Giảm nhẹ font size dropdown con */
+    text-align: left;
+    list-style: none;
+    background-clip: padding-box;
+    border-radius: 3px; /* Bo tròn nhẹ */
+    box-shadow: 0 3px 8px rgba(0,0,0,.15); /* Shadow nhẹ hơn */
+    position: absolute;
+    display: none;
+    float: left;
+}
+nav#nav ul.main-menu li.dropdown.open ul.dropdown-menu,
+nav.menu-responsive ul.main-menu li.dropdown.open ul.dropdown-menu {
+    display: block;
+}
+nav#nav ul.main-menu li.dropdown ul.dropdown-menu > li,
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu > li {
+    display: block !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    float: none !important;
+}
+nav#nav ul.main-menu li.dropdown ul.dropdown-menu > li > a,
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu > li > a {
+    display: block !important;
+    padding: 6px 15px !important; /* Điều chỉnh padding */
+    clear: both !important;
+    font-weight: normal !important;
+    line-height: 1.5 !important; /* Điều chỉnh line-height */
+    white-space: nowrap !important;
+    text-transform: none !important;
+    font-family: 'Courier New', Courier, monospace !important; /* Đồng bộ font */
+}
+
+
+#language-selector,
+#theme-dropdown {
+    background-color: inherit;
+    color: inherit;
+    border: 1px solid;
+    padding: 5px 8px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+    margin-left: 10px;
+}
+nav#nav #language-selector { /* Nếu bạn đặt ID cho select ngôn ngữ trong nav */
+    margin-left: 15px;
+}
+
+/* ... (Các mục CSS còn lại từ 4 đến hết giữ nguyên như file style.css V4 tôi đã cung cấp) ... */
+/* Đặc biệt là phần Responsive cho Footer và các section khác */
+
+
+/* -------------------------------------------------------------------------- */
+/* 4. Hero Section Styles
+/* -------------------------------------------------------------------------- */
+.hero-section { /* Sử dụng class chung .cronpost-section */
+    padding: 60px 0; 
+    text-align: center;
+    /* border-bottom đã được xử lý bởi .section-divider nếu dùng */
+}
+.hero-section#menu-1 { /* Ghi đè ID menu-1 của template nếu vẫn dùng */
+    animation: none !important; 
+}
+.hero-section .welcome-title { 
+    font-size: 2.5em; 
+    margin-bottom: 25px;
+    font-weight: bold;
+    animation: none !important;
+}
+.hero-section .subtitle { 
+    font-size: 1.1em;
+    line-height: 1.7;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 35px;
+    opacity: 0.9;
+    animation: none !important;
+}
+/* Bỏ các thành phần không cần thiết của template trong hero */
+.home-section#menu-1 .home-intro {
+    margin-bottom: 0; 
+}
+.home-section#menu-1 .list-icons,
+.home-section#menu-1 .home-projects {
+    display: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. How It Works, User Stories, Final CTA Section Styles
+/* -------------------------------------------------------------------------- */
+.how-it-works-section, /* Đảm bảo HTML dùng các class này */
+.user-stories-section,
+.final-cta-section {
+    padding: 50px 0;
+    text-align: center;
+}
+
+.steps-container,
+.stories-container {
+    display: flex;
+    justify-content: space-around; 
+    flex-wrap: wrap;
+    gap: 20px;
+}
+.step {
+    flex-basis: calc(25% - 22px); /* 22px = gap + 2*border */
+    min-width: 180px; 
+    padding: 2px;
+    border: 1px solid;
+    border-radius: 1px;
+    /* Thêm các thuộc tính sau để căn giữa nội dung bên trong .step */
+    display: flex;            /* Kích hoạt Flexbox cho .step */
+    flex-direction: column;   /* Sắp xếp các phần tử con theo chiều dọc */
+    align-items: center;      /* Căn giữa các phần tử con theo chiều ngang */
+    /* justify-content: center;  /* Căn giữa các phần tử con theo chiều dọc (nếu .step có chiều cao cố định hoặc nội dung không lấp đầy) */
+    text-align: center;       /* Đảm bảo text bên trong các phần tử con cũng được căn giữa */
+    /* Màu border sẽ theo theme */
+}
+body.theme-dark .step { border-color: #333; }
+body.theme-light .step { border-color: #ccc; }
+.step .step-icon-wrapper { /* Tạo một wrapper cho icon để kiểm soát chiều cao */
+    min-height: 50px; /* Đặt một chiều cao tối thiểu cho vùng icon, điều chỉnh nếu cần */
+    display: flex;
+    align-items: center; /* Căn icon giữa theo chiều dọc trong wrapper */
+    justify-content: center; /* Căn icon giữa theo chiều ngang trong wrapper */
+    width: 100%; /* Chiếm hết chiều rộng của .step */
+}
+.step .step-icon {
+    font-size: 2.2em;
+    /* margin-bottom: 15px; Bỏ margin-bottom ở đây, .step-icon-wrapper sẽ tạo khoảng cách */
+    font-weight: bold;
+}
+.step h3 {
+    font-size: 1.15em;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+.step p {
+    font-size: 0.9em;
+    line-height: 1.5;
+    opacity: 0.85;
+    flex-grow: 1; /* Cho phép đoạn p co giãn để các khối chữ có thể cố gắng bằng chiều cao */
+}
+
+.story {
+    flex-basis: calc(33.333% - 22px);
+    min-width: 250px;
+    padding: 20px;
+    border: 1px dashed;
+    border-radius: 3px;
+    font-style: italic;
+    opacity: 0.9;
+}
+body.theme-dark .story { border-color: #444; }
+body.theme-light .story { border-color: #bbb; }
+
+.story h4 {
+    font-size: 1.1em;
+    font-style: normal;
+    margin-bottom: 10px;
+}
+
+.final-cta-section h2 {
+    font-size: 1.8em;
+    margin-bottom: 15px;
+}
+.final-cta-section p {
+    margin-bottom: 30px;
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 7. Footer Styles - Cập nhật theo yêu cầu mới
+/* -------------------------------------------------------------------------- */
+footer.site-footer { 
+    padding: 25px 0 !important; 
+    font-size: 0.9em; 
+    border-top-width: 1px !important;
+    border-top-style: solid !important;
+    /* border-color sẽ được theme quản lý */
+}
+
+/* Ẩn các thành phần footer gốc của template */
+footer.site-footer .main-footer,
+footer.site-footer .social { /* .social là của template */
+    display: none !important;
+}
+
+/* Căn chỉnh lại .container của footer để các khối con nằm ngang */
+footer.site-footer .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Cho phép xuống dòng trên mobile */
+    gap: 15px; /* Khoảng cách giữa các khối chính */
+}
+
+.footer-copyright {
+    text-align: left; /* Căn trái cho copyright */
+    flex-basis: 100%; /* Mặc định cho mobile */
+    order: 1; /* Luôn ở đầu trên mobile */
+}
+.footer-copyright p {
+    margin-bottom: 0;
+    opacity: 0.8;
+}
+
+.cronpost-footer-nav {
+    text-align: center; /* Căn giữa các link */
+    flex-basis: 100%; /* Mặc định cho mobile */
+    order: 2; /* Ở giữa trên mobile */
+}
+.cronpost-footer-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: inline-flex; /* Để các li nằm ngang và ul co lại */
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.cronpost-footer-nav ul li {
+    margin: 0 8px 5px; 
+}
+
+.footer-theme-selector {
+    display: flex;
+    justify-content: center; /* Căn giữa trên mobile */
+    flex-basis: 100%; /* Mặc định cho mobile */
+    order: 3; /* Cuối cùng trên mobile */
+}
+/* Label của theme selector đã bị ẩn theo yêu cầu */
+/* .footer-theme-selector label { display: none; } */
+
+#theme-dropdown {
+    background-color: inherit;
+    color: inherit;
+    border: 1px solid;
+    padding: 5px 8px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 8. Responsive
+/* -------------------------------------------------------------------------- */
+a.toggle-nav { 
+    color: inherit !important;
+    background: transparent !important; 
+    width: auto;
+    height: auto;
+    line-height: normal;
+    padding: 10px;
+    margin: 10px 0 !important; 
+    top: 5px !important; 
+    right: 15px !important; 
+}
+a.toggle-nav i.fa-bars {
+    font-size: 1.8em; 
+}
+
+nav.menu-responsive {
+    background-color: transparent !important; 
+    padding: 0 !important; 
+}
+nav.menu-responsive ul.main-menu {
+    flex-direction: column;
+    width: 100%;
+}
+body.theme-dark nav.menu-responsive ul.main-menu { background-color: rgba(26,26,26,0.95); }
+body.theme-light nav.menu-responsive ul.main-menu { background-color: rgba(248,249,250,0.98); }
+
+nav.menu-responsive ul.main-menu > li {
+    margin-left: 0;
+    width: 100%;
+    text-align: left; 
+    border-bottom: 1px solid;
+}
+body.theme-dark nav.menu-responsive ul.main-menu > li { border-color: #333; }
+body.theme-light nav.menu-responsive ul.main-menu > li { border-color: #ddd; }
+
+nav.menu-responsive ul.main-menu > li:last-child {
+    border-bottom: none;
+}
+nav.menu-responsive ul.main-menu > li > a {
+    padding: 12px 20px; 
+    display: block;
+}
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu {
+    position: static !important; 
+    float: none !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border-top: 1px solid !important; 
+    margin-top: 0 !important; 
+    border-radius: 0 !important;
+}
+body.theme-dark nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu { border-top-color: #444 !important;}
+body.theme-light nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu { border-top-color: #ddd !important;}
+
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu > li > a {
+    padding-left: 30px !important; 
+}
+
+/* Responsive cho các section nội dung và Footer */
+@media (max-width: 767px) { /* Mobile */
+    .step, .story {
+        flex-basis: calc(100% - 20px);
+        margin-bottom: 20px;
+    }
+    .hero-section h1 { font-size: 1.8em; } /* Giảm font size trên mobile */
+    .hero-section .subtitle { font-size: 0.9em; }
+    .section-title { font-size: 1.6em; }
+
+    /* Footer trên mobile đã được xử lý mặc định là column */
+    .cronpost-footer-nav ul { margin: 10px 0; }
+    .cronpost-footer-nav ul li { margin: 5px 7px; }
+}
+
+@media (min-width: 768px) { /* Desktop và Tablet */
+    footer.site-footer .container {
+        flex-direction: row; /* Xếp hàng ngang */
+        justify-content: space-between;
+    }
+    .footer-copyright {
+        flex-basis: auto; /* Để nó co lại theo nội dung */
+        text-align: left;
+        order: 1; 
+    }
+    .cronpost-footer-nav {
+        flex-basis: auto;
+        order: 2;
+    }
+    .footer-theme-selector {
+        flex-basis: auto;
+        justify-content: flex-end; /* Đẩy select sang phải */
+        order: 3;
+    }
+}
+
+/* Class chung cho đường kẻ phân tách giữa các section nếu cần */
+.section-divider {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    padding-bottom: 40px; 
+    margin-bottom: 0; 
+    /* border-color sẽ theo theme */
+    /* width: 100%; /* Đảm bảo đường kẻ này full width nếu section cha của nó là full width */
+}
+/* Section cha của .section-divider cần có width:100% và không bị .container bao ngoài nếu muốn kẻ full */
+/* Nếu section cha có .container, thì .section-divider sẽ chỉ kẻ trong .container */
+
+main section:last-of-type.section-divider {
+    border-bottom: none;
+    padding-bottom: 0; 
+}
