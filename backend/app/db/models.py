@@ -1,5 +1,5 @@
 # /backend/app/db/models.py
-# Version: 2.3 (sửa lỗi receiver_id)
+# Version: 2.4 (Added missing fields to InAppMessage model)
 
 import enum
 import uuid
@@ -253,6 +253,8 @@ class InAppMessage(Base):
     sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     read_at = Column(DateTime(timezone=True))
     attachment_file_id = Column(UUID(as_uuid=True), ForeignKey('uploaded_files.id', ondelete="SET NULL"), nullable=True)
+    is_deleted_by_sender = Column(Boolean, default=False, nullable=False)
+    is_deleted_by_receiver = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     
