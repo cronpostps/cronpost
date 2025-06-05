@@ -1,5 +1,5 @@
 # backend/app/core/security.py
-# Version: 1.0 (Handles JWT decoding and current user dependency)
+# Version: 1.1 (Thieu import UserAccountStatusEnum)
 
 import os
 import logging
@@ -13,7 +13,7 @@ from fastapi.security import OAuth2PasswordBearer # Dùng để khai báo scheme
 from jose import jwt as python_jose_jwt, JWTError as JoseJWTError # Sử dụng alias như trong auth_router
 
 from ..db.database import get_db_session
-from ..db.models import User
+from ..db.models import User, UserAccountStatusEnum
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
