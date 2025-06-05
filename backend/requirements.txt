@@ -1,11 +1,11 @@
 # backend/requirements.txt
-# Version: 1.3
+# Version: 1.4
 # Mô tả: Danh sách các thư viện Python, ưu tiên các phiên bản mới và ổn định.
 
 fastapi==0.111.0
 uvicorn[standard]==0.30.1 # Bao gồm websockets và uvloop
 python-dotenv==1.0.1
-httpx==0.27.0 # Giữ nguyên phiên bản bạn đã dùng
+httpx==0.27.0
 
 # Database: SQLAlchemy ORM và driver ASYNC cho PostgreSQL
 sqlalchemy==2.0.30
@@ -20,7 +20,9 @@ authlib==1.3.0 # Cho Google OAuth
 itsdangerous==2.2.0
 slowapi==0.1.9
 
-# Pydantic - FastAPI 0.111.x thường làm việc tốt với Pydantic v2.x
-# Phiên bản này đã được kiểm tra và tương thích tốt với FastAPI 0.111.x
+# Pydantic
 pydantic==2.7.4 
 pydantic-settings==2.3.4
+
+# Timezone handling
+pytz==2024.1 # THÊM DÒNG NÀY

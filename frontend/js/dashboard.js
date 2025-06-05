@@ -1,10 +1,10 @@
 // frontend/js/dashboard.js
-// Version: 1.2 (Implemented fetchAndDisplayMessageOverview to call API)
+// Version: 1.6 (Implemented handleStopFns function to call API)
 
-console.log("--- dashboard.js SCRIPT STARTED (v1.2) ---");
+console.log("--- dashboard.js SCRIPT STARTED (v1.6) ---");
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("--- dashboard.js DOMContentLoaded event fired (v1.2) ---");
+    console.log("--- dashboard.js DOMContentLoaded event fired (v1.6) ---");
 
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
@@ -13,14 +13,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // --- Lấy DOM Elements ---
+    let currentUserSettings = {
+        use_pin_for_all_actions: false
+    };
+
     const welcomeMessageEl = document.getElementById('welcomeMessage');
     const accountStatusEl = document.getElementById('accountStatus');
     const countdownTimerEl = document.getElementById('countdownTimer');
     const countdownLabelEl = document.getElementById('countdownLabel');
     const mainActionButton = document.getElementById('mainActionButton');
+    const generalDashboardMessageEl = document.getElementById('generalDashboardMessage');
 
-    // Account Details
     const dashUserNameEl = document.getElementById('dashUserName');
     const dashMembershipTypeEl = document.getElementById('dashMembershipType');
     const upgradeNowBtn = document.getElementById('upgradeNowBtn');
@@ -31,46 +34,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dashStorageUsedEl = document.getElementById('dashStorageUsed');
     const dashStorageLimitEl = document.getElementById('dashStorageLimit');
 
-    // Message Overview
     const imStatusEl = document.getElementById('imStatus');
     const fmActiveCountEl = document.getElementById('fmActiveCount');
     const fmInactiveCountEl = document.getElementById('fmInactiveCount');
     const scmActiveCountEl = document.getElementById('scmActiveCount');
     const scmInactiveCountEl = document.getElementById('scmInactiveCount');
 
-    // Quick Actions
     const createCronMessageBtn = document.getElementById('createCronMessageBtn');
     const createSimpleMessageBtn = document.getElementById('createSimpleMessageBtn');
-    const uploadFileQuickBtn = document.getElementById('uploadFileQuickBtn');
+    const inAppMessagingQuickBtn = document.getElementById('inAppMessagingQuickBtn');
 
-    // Header elements
     const headerUserIdentifier = document.getElementById('headerUserIdentifier');
     const logoutButton = document.getElementById('logoutButton');
-    const inAppUnreadCountSpan = document.getElementById('inAppUnreadCount');
+    const inAppUnreadCountSpanHeader = document.getElementById('inAppUnreadCount');
+    const quickActionUnreadCountSpan = document.getElementById('quickActionUnreadCount');
 
+    function displayDashboardMessage(message, isSuccess = false) {
+        if (generalDashboardMessageEl) {
+            generalDashboardMessageEl.textContent = message;
+            generalDashboardMessageEl.className = 'alert mt-3';
+            if (message) {
+                generalDashboardMessageEl.classList.add(isSuccess ? 'alert-success' : 'alert-danger');
+                generalDashboardMessageEl.style.display = 'block';
+            } else {
+                generalDashboardMessageEl.style.display = 'none';
+            }
+        } else if (message) {
+            alert(message);
+        }
+    }
 
-    // --- Hàm Fetch Dữ liệu User và Cập nhật UI ---
     async function fetchAndDisplayUserData() {
+        displayDashboardMessage("");
         try {
             const response = await fetch('/api/users/me', {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             });
 
             if (response.ok) {
                 const userData = await response.json();
-                console.log("User data received:", userData);
+                console.log("User data received for dashboard:", userData);
+                currentUserSettings.use_pin_for_all_actions = userData.use_pin_for_all_actions || false;
 
-                if (headerUserIdentifier) {
-                    headerUserIdentifier.textContent = userData.user_name || userData.email;
-                }
-                if (welcomeMessageEl) {
-                    welcomeMessageEl.textContent = `Welcome, ${userData.user_name || userData.email}!`;
-                }
-                if (accountStatusEl) {
-                    accountStatusEl.textContent = formatAccountStatus(userData.account_status);
-                }
+                if (headerUserIdentifier) headerUserIdentifier.textContent = userData.user_name || userData.email;
+                if (welcomeMessageEl) welcomeMessageEl.textContent = `Welcome, ${userData.user_name || userData.email}!`;
+                if (accountStatusEl) accountStatusEl.textContent = formatAccountStatus(userData.account_status);
                 if (dashUserNameEl) dashUserNameEl.textContent = userData.user_name || 'N/A';
                 if (dashMembershipTypeEl) dashMembershipTypeEl.textContent = userData.membership_type.charAt(0).toUpperCase() + userData.membership_type.slice(1);
                 
@@ -89,29 +97,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (dashUserTimezoneEl) dashUserTimezoneEl.textContent = userData.timezone || 'N/A';
                 if (dashUserLanguageEl) dashUserLanguageEl.textContent = userData.language || 'N/A';
-                
-                if (dashMessagesRemainingEl) {
-                    dashMessagesRemainingEl.textContent = userData.messages_remaining !== null 
-                        ? String(userData.messages_remaining)
-                        : 'N/A';
-                }
-                if (dashStorageUsedEl) {
-                    dashStorageUsedEl.textContent = formatBytes(userData.uploaded_storage_bytes || 0);
-                }
-                if (dashStorageLimitEl) {
-                    dashStorageLimitEl.textContent = userData.storage_limit_gb !== null 
-                        ? `${userData.storage_limit_gb} GB` 
-                        : (userData.membership_type === 'premium' ? '1 GB' : '0 GB');
-                }
+                if (dashMessagesRemainingEl) dashMessagesRemainingEl.textContent = userData.messages_remaining !== null ? String(userData.messages_remaining) : 'N/A';
+                if (dashStorageUsedEl) dashStorageUsedEl.textContent = formatBytes(userData.uploaded_storage_bytes || 0);
+                if (dashStorageLimitEl) dashStorageLimitEl.textContent = userData.storage_limit_gb !== null ? `${userData.storage_limit_gb} GB` : (userData.membership_type === 'premium' ? '1 GB' : '0 GB');
 
                 updateCountdownAndAction(
                     userData.account_status, 
                     userData.next_clc_prompt_at, 
-                    userData.wct_active_ends_at
+                    userData.wct_active_ends_at,
+                    userData.next_fns_send_at // Truyền giá trị này nếu API /users/me cung cấp
                 );
                 
-                // Gọi fetchAndDisplayMessageOverview VÀ fetchAndUpdateUnreadCount sau khi userData đã được tải
-                await fetchAndDisplayMessageOverview(); // Sử dụng await để đảm bảo thứ tự nếu cần
+                await fetchAndDisplayMessageOverview();
                 await fetchAndUpdateUnreadCount();
 
             } else if (response.status === 401) {
@@ -122,18 +119,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 const errorText = await response.text();
                 console.error("Failed to fetch user data:", response.status, errorText);
-                if (welcomeMessageEl) welcomeMessageEl.textContent = "Welcome!";
-                if (accountStatusEl) accountStatusEl.textContent = "Error loading status";
+                displayDashboardMessage(`Error loading user data: ${response.status}. Please try refreshing.`, false);
                 if (headerUserIdentifier) headerUserIdentifier.textContent = "User";
             }
         } catch (error) {
             console.error("Error fetching user data:", error);
-            if (welcomeMessageEl) welcomeMessageEl.textContent = "Welcome!";
-            if (accountStatusEl) accountStatusEl.textContent = "Error loading status";
+            displayDashboardMessage("Network error while loading user data. Please check your connection.", false);
         }
     }
 
-    function formatAccountStatus(status) {
+    function formatAccountStatus(status) { /* ... giữ nguyên ... */ 
         if (!status) return 'Unknown';
         switch (status) {
             case 'INS': return 'Inactive (No Message Schedule)';
@@ -143,8 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             default: return status;
         }
     }
-    
-    function formatBytes(bytes, decimals = 2) {
+    function formatBytes(bytes, decimals = 2) { /* ... giữ nguyên ... */ 
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const dm = decimals < 0 ? 0 : decimals;
@@ -154,17 +148,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     let countdownInterval;
-    function updateCountdownAndAction(accountStatus, nextClcPromptAt, wctActiveEndsAt, nextFnsSendAt = null) {
+    function updateCountdownAndAction(accountStatus, nextClcPromptAt, wctActiveEndsAt, nextFnsSendAt = null) { /* ... giữ nguyên logic đã cập nhật ở v1.5 ... */ 
         if (countdownInterval) clearInterval(countdownInterval);
-        if (!countdownTimerEl || !countdownLabelEl || !mainActionButton) return;
+        const currentMainActionButton = document.getElementById('mainActionButton'); // Lấy nút ở đây để đảm bảo nó luôn là nút mới nhất trên DOM
+        if (!countdownTimerEl || !countdownLabelEl || !currentMainActionButton) return;
+
 
         let targetTime = null;
         let labelText = "";
         let actionButtonText = "";
         let actionButtonVisible = false;
         let actionButtonHandler = null;
-        
-        const currentMainActionButton = document.getElementById('mainActionButton');
 
         if (accountStatus === 'ANS_CLC' && nextClcPromptAt) {
             targetTime = new Date(nextClcPromptAt);
@@ -177,38 +171,40 @@ document.addEventListener('DOMContentLoaded', async () => {
             actionButtonVisible = true;
             actionButtonHandler = handleCheckIn;
         } else if (accountStatus === 'FNS') {
-            if (nextFnsSendAt) {
+            if (nextFnsSendAt) { // Sử dụng next_fns_send_at nếu có
                 targetTime = new Date(nextFnsSendAt);
                 labelText = "Next message will be sent in:";
             } else {
                 targetTime = null;
                 labelText = "Account is Frozen. Messages are being processed.";
-                countdownTimerEl.textContent = "PROCESSING";
+                if(countdownTimerEl) countdownTimerEl.textContent = "PROCESSING";
             }
-            actionButtonText = "STOP FNS";
+            actionButtonText = "STOP FNS"; // Theo tài liệu, nút này là "STOP Sending"
             actionButtonVisible = true;
-            actionButtonHandler = handleStopFns;
+            actionButtonHandler = handleStopFns; // Gán handler mới
         } else if (accountStatus === 'INS') {
             labelText = "No active message schedule. Create an Initial Message to start.";
-            countdownTimerEl.textContent = "N/A";
+            if(countdownTimerEl) countdownTimerEl.textContent = "N/A";
             actionButtonText = "Create Initial Message";
             actionButtonVisible = true;
             actionButtonHandler = () => { window.location.href = '/cron-message.html?type=im'; };
         } else {
             labelText = "Account status is unclear or no active schedule.";
-            countdownTimerEl.textContent = "--:--:--";
+            if(countdownTimerEl) countdownTimerEl.textContent = "--:--:--";
             actionButtonVisible = false;
         }
 
-        countdownLabelEl.textContent = labelText;
+        if(countdownLabelEl) countdownLabelEl.textContent = labelText;
 
         if (currentMainActionButton) {
             if (actionButtonVisible) {
                 currentMainActionButton.textContent = actionButtonText;
                 currentMainActionButton.style.display = 'block';
+                
+                // Gỡ bỏ event listener cũ và thêm mới
+                const freshButton = currentMainActionButton.cloneNode(true);
+                currentMainActionButton.parentNode.replaceChild(freshButton, currentMainActionButton);
                 if (actionButtonHandler) {
-                    const freshButton = currentMainActionButton.cloneNode(true);
-                    currentMainActionButton.parentNode.replaceChild(freshButton, currentMainActionButton);
                     freshButton.addEventListener('click', actionButtonHandler);
                 }
             } else {
@@ -223,13 +219,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (distance < 0) {
                     clearInterval(countdownInterval);
-                    countdownTimerEl.textContent = "EXPIRED/TRIGGERED";
-                    if (accountStatus === 'ANS_WCT') {
-                        countdownLabelEl.textContent = "Check-in window closed. Processing messages if not checked-in.";
-                    } else if (accountStatus === 'ANS_CLC') {
-                        countdownLabelEl.textContent = "Check-in prompt period should have started.";
-                    } else {
-                        countdownLabelEl.textContent = "Process triggered or schedule ended.";
+                    if(countdownTimerEl) countdownTimerEl.textContent = "EXPIRED/TRIGGERED";
+                    if(countdownLabelEl){
+                        if (accountStatus === 'ANS_WCT') {
+                            countdownLabelEl.textContent = "Check-in window closed. Processing messages if not checked-in.";
+                        } else if (accountStatus === 'ANS_CLC') {
+                            countdownLabelEl.textContent = "Check-in prompt period should have started.";
+                        } else if (accountStatus === 'FNS' && nextFnsSendAt){ // Thêm điều kiện cho FNS
+                             countdownLabelEl.textContent = "Message sending period has passed or message sent.";
+                        }
+                         else {
+                            countdownLabelEl.textContent = "Process triggered or schedule ended.";
+                        }
                     }
                     fetchAndDisplayUserData(); 
                     return;
@@ -243,27 +244,123 @@ document.addEventListener('DOMContentLoaded', async () => {
                 let countdownText = "";
                 if (days > 0) countdownText += `${days}d `;
                 countdownText += `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                countdownTimerEl.textContent = countdownText;
+                if(countdownTimerEl) countdownTimerEl.textContent = countdownText;
 
             }, 1000);
-        } else if (accountStatus !== 'FNS' || (accountStatus === 'FNS' && !nextFnsSendAt)) { 
-            if(countdownTimerEl && accountStatus !== 'INS' && (accountStatus !== 'FNS' || !nextFnsSendAt)) {
-                countdownTimerEl.textContent = "--:--:--";
+        } else if (countdownTimerEl && (accountStatus !== 'FNS' || (accountStatus === 'FNS' && !nextFnsSendAt)) && accountStatus !== 'INS') { 
+             countdownTimerEl.textContent = "--:--:--";
+        }
+    }
+
+    async function handleCheckIn() { /* ... giữ nguyên như v1.5 ... */ 
+        displayDashboardMessage(""); 
+        let pinCode = null;
+
+        if (currentUserSettings.use_pin_for_all_actions) {
+            pinCode = prompt("Please enter your 4-digit PIN to check-in:");
+            if (pinCode === null) { 
+                displayDashboardMessage("Check-in cancelled by user.", false);
+                return;
+            }
+            if (!/^\d{4}$/.test(pinCode)) {
+                displayDashboardMessage("Invalid PIN format. Please enter a 4-digit PIN.", false);
+                return;
+            }
+        }
+
+        const currentMainActionButton = document.getElementById('mainActionButton');
+        const originalButtonText = currentMainActionButton ? currentMainActionButton.textContent : "Check-in Now";
+        if (currentMainActionButton) {
+            currentMainActionButton.disabled = true;
+            currentMainActionButton.textContent = "Checking In...";
+        }
+
+        try {
+            const response = await fetch('/api/users/check-in', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ pin_code: pinCode }) 
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                displayDashboardMessage(data.message || "Check-in successful! Reloading dashboard...", true);
+                await fetchAndDisplayUserData(); 
+            } else {
+                displayDashboardMessage(data.detail || `Check-in failed: ${response.status}`, false);
+            }
+        } catch (error) {
+            console.error("Error during check-in:", error);
+            displayDashboardMessage("A network error occurred during check-in. Please try again.", false);
+        } finally {
+            if (currentMainActionButton) {
+                currentMainActionButton.disabled = false;
+                currentMainActionButton.textContent = originalButtonText;
             }
         }
     }
 
-    function handleCheckIn() {
-        alert("Check-in button clicked! (Logic to be implemented - Call API /api/users/check-in)");
-    }
+    // --- CẬP NHẬT handleStopFns ---
+    async function handleStopFns() {
+        displayDashboardMessage(""); // Xóa thông báo cũ
+        
+        const pinCode = prompt("To stop FNS, please enter your 4-digit PIN:");
+        if (pinCode === null) { // User cancelled prompt
+            displayDashboardMessage("Stop FNS action cancelled by user.", false);
+            return;
+        }
+        if (!/^\d{4}$/.test(pinCode)) {
+            displayDashboardMessage("Invalid PIN format. Please enter a 4-digit PIN.", false);
+            return;
+        }
 
-    function handleStopFns() {
-        alert("STOP FNS button clicked! (Logic to be implemented - Call API /api/users/stop-fns)");
+        const currentMainActionButton = document.getElementById('mainActionButton');
+        const originalButtonText = currentMainActionButton ? currentMainActionButton.textContent : "STOP FNS";
+        if (currentMainActionButton) {
+            currentMainActionButton.disabled = true;
+            currentMainActionButton.textContent = "Stopping FNS...";
+        }
+
+        try {
+            const response = await fetch('/api/users/stop-fns', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ pin_code: pinCode })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                displayDashboardMessage(data.message || "FNS stopped successfully! Reloading dashboard...", true);
+                await fetchAndDisplayUserData(); // Tải lại toàn bộ dữ liệu dashboard
+            } else {
+                displayDashboardMessage(data.detail || `Failed to stop FNS: ${response.status}`, false);
+            }
+        } catch (error) {
+            console.error("Error during stop FNS:", error);
+            displayDashboardMessage("A network error occurred while stopping FNS. Please try again.", false);
+        } finally {
+            if (currentMainActionButton) {
+                currentMainActionButton.disabled = false;
+                // Nút có thể đã thay đổi text/handler sau khi fetchAndDisplayUserData,
+                // nên không nhất thiết phải đặt lại text ở đây.
+                // Tuy nhiên, nếu fetchAndDisplayUserData không cập nhật nút ngay lập tức,
+                // có thể cần đặt lại text của nút về trạng thái phù hợp (ví dụ: "Check-in Now" nếu trạng thái đổi)
+                // Hoặc đơn giản là dựa vào fetchAndDisplayUserData để cập nhật.
+                // Để an toàn, chỉ enable lại, fetchAndDisplayUserData sẽ set text.
+                // currentMainActionButton.textContent = originalButtonText; // Có thể không cần dòng này
+            }
+        }
     }
     
-    // --- Fetch Message Overview ---
-    async function fetchAndDisplayMessageOverview() {
-        // Xóa các giá trị "API needed" cũ
+    async function fetchAndDisplayMessageOverview() { /* ... giữ nguyên ... */ 
         if (imStatusEl) imStatusEl.textContent = "Loading...";
         if (fmActiveCountEl) fmActiveCountEl.textContent = "Loading...";
         if (fmInactiveCountEl) fmInactiveCountEl.textContent = "Loading...";
@@ -284,47 +381,61 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 console.error("Failed to fetch message overview:", response.status);
                 if (imStatusEl) imStatusEl.textContent = "Error";
-                // Có thể set các count về "Error" hoặc "-"
+                if (fmActiveCountEl) fmActiveCountEl.textContent = "-";
+                if (fmInactiveCountEl) fmInactiveCountEl.textContent = "-";
+                if (scmActiveCountEl) scmActiveCountEl.textContent = "-";
+                if (scmInactiveCountEl) scmInactiveCountEl.textContent = "-";
             }
         } catch (error) {
             console.error("Error fetching message overview:", error);
             if (imStatusEl) imStatusEl.textContent = "Error";
         }
     }
+    async function fetchAndUpdateUnreadCount() { /* ... giữ nguyên ... */ 
+        const spansToUpdate = [inAppUnreadCountSpanHeader, quickActionUnreadCountSpan];
 
-    // --- Fetch Unread In-App Message Count (Placeholder) ---
-    async function fetchAndUpdateUnreadCount() {
-        if (!inAppUnreadCountSpan) return;
-        const count = 0; 
-        inAppUnreadCountSpan.textContent = count > 99 ? "99+" : String(count);
-        inAppUnreadCountSpan.classList.remove('bg-danger', 'bg-success', 'bg-secondary');
-        if (count > 0) {
-            inAppUnreadCountSpan.classList.add('bg-danger');
-            inAppUnreadCountSpan.style.display = 'inline-block';
-        } else {
-            inAppUnreadCountSpan.classList.add('bg-secondary'); 
-            inAppUnreadCountSpan.style.display = 'inline-block';
+        spansToUpdate.forEach(span => {
+            if (span) {
+                span.textContent = ""; 
+                span.style.display = 'none'; 
+                span.classList.remove('bg-danger', 'bg-success', 'bg-secondary');
+            }
+        });
+
+        try {
+            const response = await fetch('/api/messaging/unread-count', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                const count = data.unread_count || 0;
+                
+                spansToUpdate.forEach(span => {
+                    if (span) {
+                        span.textContent = count > 99 ? "99+" : String(count);
+                        if (count > 0) {
+                            span.classList.add('bg-danger');
+                            span.style.display = 'inline-block';
+                        } else {
+                           span.style.display = 'none'; 
+                        }
+                    }
+                });
+            } else {
+                console.error("Failed to fetch unread in-app message count:", response.status);
+                spansToUpdate.forEach(span => { if (span) span.style.display = 'none'; });
+            }
+        } catch (error) {
+            console.error("Error fetching unread in-app message count:", error);
+            spansToUpdate.forEach(span => { if (span) span.style.display = 'none'; });
         }
     }
 
-    if (createCronMessageBtn) {
-        createCronMessageBtn.onclick = () => { window.location.href = '/cron-message.html'; };
-    }
-    if (createSimpleMessageBtn) {
-        createSimpleMessageBtn.onclick = () => { window.location.href = '/simple-cron-email-message.html'; };
-    }
-    if (uploadFileQuickBtn) {
-        uploadFileQuickBtn.onclick = async () => {
-            const userMembership = dashMembershipTypeEl ? dashMembershipTypeEl.textContent.toLowerCase() : 'free';
-            if (userMembership !== 'premium') {
-                alert("File upload is a Premium feature. Please upgrade your account.");
-            } else {
-                window.location.href = '/upload-attach-file.html';
-            }
-        };
-    }
-
-    if (logoutButton) {
+    // Event Listeners
+    if (createCronMessageBtn) createCronMessageBtn.onclick = () => { window.location.href = '/cron-message.html'; };
+    if (createSimpleMessageBtn) createSimpleMessageBtn.onclick = () => { window.location.href = '/simple-cron-email-message.html'; };
+    if (inAppMessagingQuickBtn) inAppMessagingQuickBtn.onclick = () => { window.location.href = '/in-app-messaging.html'; };
+    if (logoutButton) { /* ... giữ nguyên ... */ 
         logoutButton.addEventListener('click', async (e) => {
             e.preventDefault();
             console.log("Logout button clicked");
@@ -348,5 +459,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     fetchAndDisplayUserData();
 
-    console.log("--- dashboard.js DOMContentLoaded event listener finished (v1.2) ---");
+    console.log("--- dashboard.js DOMContentLoaded event listener finished (v1.6) ---");
 });

@@ -1,5 +1,5 @@
 # backend/app/routers/auth_router.py
-# Version: 2.6.10 (Auto-populate user_name from email prefix on email/password signup)
+# Version: 2.6.11 (Fix UserAccountStatusEnum to INS)
 
 import os
 import logging
@@ -250,7 +250,7 @@ async def confirm_email_endpoint(token: str, db_session: AsyncSession = Depends(
         logger.info(f"Email {user.email} was already confirmed for user {user.id} (user table).")
         return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_already_confirmed&email={user.email}")
     user.is_confirmed_by_email = True; user.updated_at = datetime.now(dt_timezone.utc)
-    if user.account_status == UserAccountStatusEnum.INS: user.account_status = UserAccountStatusEnum.ANS_CLC
+    if user.account_status == UserAccountStatusEnum.INS: user.account_status = UserAccountStatusEnum.INS
     confirmation_record.is_confirmed = True; confirmation_record.confirmed_at = datetime.now(dt_timezone.utc)
     await db_session.commit()
     logger.info(f"Email {user.email} confirmed successfully for user {user.id}.")
@@ -384,12 +384,12 @@ async def google_oauth_callback(
         if not user:
             user = User(email=google_email, password_hash=hashed_pw, google_id=google_id,
                         user_name=user_claims.get("name"), is_confirmed_by_email=True,
-                        account_status=UserAccountStatusEnum.ANS_CLC, provider='google')
+                        account_status=UserAccountStatusEnum.INS, provider='google')
             db_session.add(user); status_param = "google_signup_success_check_email"
         else:
             user.password_hash, user.google_id, user.is_confirmed_by_email = hashed_pw, google_id, True
             user.user_name = user_claims.get("name") or user.user_name
-            user.provider, user.account_status = 'google', UserAccountStatusEnum.ANS_CLC
+            user.provider, user.account_status = 'google', UserAccountStatusEnum.INS
             status_param = "google_merge_success_check_email"
         try: await db_session.commit(); await db_session.refresh(user); await dispatch_send_google_welcome_email(google_email, user_claims.get("name"), random_pw, background_tasks)
         except IntegrityError: await db_session.rollback(); logger.error(f"IntegrityError Google OAuth user save: {google_email}", exc_info=True); return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=google_oauth_db_error")

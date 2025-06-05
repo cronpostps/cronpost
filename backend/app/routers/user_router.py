@@ -1,23 +1,22 @@
 # backend/app/routers/user_router.py
-# Version: 1.2 (Calculate messages_remaining and storage_limit_gb from DB)
+# Version: 1.3 (Added use_pin_for_all_actions to UserProfileResponse)
 
 import logging
 import uuid
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict # Đã có List, Dict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func # Import func để sử dụng count
+from sqlalchemy import func
 
-# Import các thành phần cần thiết
 from ..db.database import get_db_session
-from ..db.models import ( # Import các model cần thiết
+from ..db.models import (
     User,
     UserConfiguration,
     SystemSetting,
     Message,
-    MessageOverallStatusEnum, # Enum cho trạng thái tin nhắn
+    MessageOverallStatusEnum,
     UserAccountStatusEnum,
     UserMembershipTypeEnum
 )
@@ -25,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-# Import dependency để lấy user hiện tại
 from ..core.security import get_current_active_user
 
 logger = logging.getLogger(__name__)
@@ -34,7 +32,6 @@ router = APIRouter(
     dependencies=[Depends(get_current_active_user)]
 )
 
-# --- Pydantic Models for User Data Response ---
 class UserProfileResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
@@ -51,13 +48,13 @@ class UserProfileResponse(BaseModel):
     uploaded_storage_bytes: int
     messages_remaining: Optional[int] = None
     storage_limit_gb: Optional[int] = None
+    use_pin_for_all_actions: bool # <<< THÊM TRƯỜNG MỚI
 
     class Config:
         from_attributes = True
 
 
 async def get_system_settings(db_session: AsyncSession, keys: List[str]) -> Dict[str, Optional[str]]:
-    """Helper function to fetch multiple system settings."""
     stmt = select(SystemSetting).where(SystemSetting.setting_key.in_(keys))
     result = await db_session.execute(stmt)
     settings_db = result.scalars().all()
@@ -69,42 +66,32 @@ async def read_users_me(
     current_user: User = Depends(get_current_active_user),
     db_session: AsyncSession = Depends(get_db_session)
 ):
-    """
-    Retrieve details for the currently authenticated user, including calculated
-    message counts and storage limits.
-    """
     logger.info(f"Fetching profile for user: {current_user.email}")
 
-    user_config: Optional[UserConfiguration] = current_user.configuration
+    user_config: Optional[UserConfiguration] = current_user.configuration # Đã được eager load
         
     next_clc = user_config.next_clc_prompt_at if user_config else None
     wct_ends = user_config.wct_active_ends_at if user_config else None
 
-    # Fetch system settings for message and storage limits
     setting_keys_needed = [
         "max_total_messages_free",
         "max_total_messages_premium",
         "max_total_upload_storage_gb_premium"
-        # "storage_limit_gb_free" # Cân nhắc thêm key này vào init.sql nếu free user có giới hạn khác 0
     ]
     settings = await get_system_settings(db_session, setting_keys_needed)
 
-    # Determine limits based on membership type
     max_messages_allowed = 0
     storage_limit_gb_for_user = 0
 
     try:
         if current_user.membership_type == UserMembershipTypeEnum.premium:
-            max_messages_allowed = int(settings.get("max_total_messages_premium", "1000")) # Default 1000 nếu setting không có
-            storage_limit_gb_for_user = int(settings.get("max_total_upload_storage_gb_premium", "1")) # Default 1GB
+            max_messages_allowed = int(settings.get("max_total_messages_premium", "1000"))
+            storage_limit_gb_for_user = int(settings.get("max_total_upload_storage_gb_premium", "1"))
         else: # Free user
-            max_messages_allowed = int(settings.get("max_total_messages_free", "10")) # Default 10
-            # Giả sử free user không có storage hoặc giới hạn là 0 GB.
-            # Nếu có setting 'storage_limit_gb_free', hãy dùng nó ở đây.
+            max_messages_allowed = int(settings.get("max_total_messages_free", "10"))
             storage_limit_gb_for_user = 0 
     except ValueError:
         logger.error(f"Could not parse system settings for limits for user {current_user.email}. Using hardcoded defaults.")
-        # Fallback to hardcoded defaults if settings are missing or invalid
         if current_user.membership_type == UserMembershipTypeEnum.premium:
             max_messages_allowed = 1000
             storage_limit_gb_for_user = 1
@@ -112,8 +99,6 @@ async def read_users_me(
             max_messages_allowed = 10
             storage_limit_gb_for_user = 0
 
-
-    # Count active messages for the current user
     active_message_statuses = [MessageOverallStatusEnum.pending, MessageOverallStatusEnum.processing]
     active_messages_stmt = (
         select(func.count(Message.id))
@@ -140,6 +125,7 @@ async def read_users_me(
         "uploaded_storage_bytes": current_user.uploaded_storage_bytes,
         "messages_remaining": messages_remaining_val,
         "storage_limit_gb": storage_limit_gb_for_user,
+        "use_pin_for_all_actions": current_user.use_pin_for_all_actions # <<< LẤY GIÁ TRỊ TỪ current_user
     }
     
     return UserProfileResponse(**response_data)
