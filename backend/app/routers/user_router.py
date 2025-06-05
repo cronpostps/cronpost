@@ -19,7 +19,6 @@ from ..core.security import get_current_active_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
-    # prefix="/users", # Tiền tố cho tất cả các route trong router này
     tags=["Users"],  # Tag cho API docs
     dependencies=[Depends(get_current_active_user)] # Áp dụng cho tất cả các route trong router này
 )
