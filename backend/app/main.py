@@ -1,5 +1,5 @@
 # backend/app/main.py
-# version 1.12
+# version 1.12.1 (thêm message_router)
 
 import os
 import logging
@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from .routers import auth_router, signin_router, password_reset_router, user_router
+from .routers import auth_router, signin_router, password_reset_router, user_router, message_router
 from .db.database import engine 
 
 @asynccontextmanager
@@ -101,6 +101,7 @@ app.include_router(auth_router.router, prefix="/auth")
 app.include_router(signin_router.router, prefix="/auth")
 app.include_router(password_reset_router.router, prefix="/auth")
 app.include_router(user_router.router, prefix="/users")
+app.include_router(message_router.router, prefix="/messages")
 logger.info("Auth, signin, password_reset, and user routers included.")
 
 # --- Root Endpoints ---

@@ -1,16 +1,15 @@
 // frontend/js/dashboard.js
-// Version: 1.0
-// Mô tả: Logic cho trang Dashboard (dashboard.html)
+// Version: 1.2 (Implemented fetchAndDisplayMessageOverview to call API)
 
-console.log("--- dashboard.js SCRIPT STARTED (v1.0) ---");
+console.log("--- dashboard.js SCRIPT STARTED (v1.2) ---");
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("--- dashboard.js DOMContentLoaded event fired (v1.0) ---");
+    console.log("--- dashboard.js DOMContentLoaded event fired (v1.2) ---");
 
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
         console.log("No access token found, redirecting to signin.");
-        window.location.href = '/signin.html?status=session_expired'; // Hoặc một status khác
+        window.location.href = '/signin.html?status=session_expired';
         return;
     }
 
@@ -27,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const upgradeNowBtn = document.getElementById('upgradeNowBtn');
     const manageSubscriptionBtn = document.getElementById('manageSubscriptionBtn');
     const dashUserTimezoneEl = document.getElementById('dashUserTimezone');
-    const dashUserLanguageEl = document.getElementById('dashUserLanguage'); // Thêm từ HTML
+    const dashUserLanguageEl = document.getElementById('dashUserLanguage');
     const dashMessagesRemainingEl = document.getElementById('dashMessagesRemaining');
     const dashStorageUsedEl = document.getElementById('dashStorageUsed');
     const dashStorageLimitEl = document.getElementById('dashStorageLimit');
@@ -44,7 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const createSimpleMessageBtn = document.getElementById('createSimpleMessageBtn');
     const uploadFileQuickBtn = document.getElementById('uploadFileQuickBtn');
 
-    // Header elements (nếu dashboard.js quản lý logout và unread count)
+    // Header elements
     const headerUserIdentifier = document.getElementById('headerUserIdentifier');
     const logoutButton = document.getElementById('logoutButton');
     const inAppUnreadCountSpan = document.getElementById('inAppUnreadCount');
@@ -63,68 +62,74 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const userData = await response.json();
                 console.log("User data received:", userData);
 
-                // Cập nhật Header
                 if (headerUserIdentifier) {
                     headerUserIdentifier.textContent = userData.user_name || userData.email;
                 }
-
-                // Cập nhật Dashboard Header
                 if (welcomeMessageEl) {
                     welcomeMessageEl.textContent = `Welcome, ${userData.user_name || userData.email}!`;
                 }
                 if (accountStatusEl) {
                     accountStatusEl.textContent = formatAccountStatus(userData.account_status);
                 }
-
-                // Cập nhật Account Details
                 if (dashUserNameEl) dashUserNameEl.textContent = userData.user_name || 'N/A';
                 if (dashMembershipTypeEl) dashMembershipTypeEl.textContent = userData.membership_type.charAt(0).toUpperCase() + userData.membership_type.slice(1);
                 
-                if (userData.membership_type === 'free' && upgradeNowBtn) {
-                    upgradeNowBtn.style.display = 'inline-block';
-                    if(manageSubscriptionBtn) manageSubscriptionBtn.style.display = 'none';
-                } else if (userData.membership_type === 'premium' && manageSubscriptionBtn) {
-                    manageSubscriptionBtn.style.display = 'inline-block';
-                    if(upgradeNowBtn) upgradeNowBtn.style.display = 'none';
+                if (upgradeNowBtn && manageSubscriptionBtn) {
+                    if (userData.membership_type === 'free') {
+                        upgradeNowBtn.style.display = 'inline-block';
+                        manageSubscriptionBtn.style.display = 'none';
+                    } else if (userData.membership_type === 'premium') {
+                        manageSubscriptionBtn.style.display = 'inline-block';
+                        upgradeNowBtn.style.display = 'none';
+                    } else {
+                        upgradeNowBtn.style.display = 'none';
+                        manageSubscriptionBtn.style.display = 'none';
+                    }
                 }
 
                 if (dashUserTimezoneEl) dashUserTimezoneEl.textContent = userData.timezone || 'N/A';
                 if (dashUserLanguageEl) dashUserLanguageEl.textContent = userData.language || 'N/A';
                 
-                // Cần API để lấy messages_remaining và storage_limit/used
-                // Tạm thời để N/A
-                if (dashMessagesRemainingEl) dashMessagesRemainingEl.textContent = userData.messages_remaining !== undefined ? userData.messages_remaining : 'N/A (API needed)';
-                if (dashStorageUsedEl) dashStorageUsedEl.textContent = formatBytes(userData.uploaded_storage_bytes || 0);
-                if (dashStorageLimitEl) dashStorageLimitEl.textContent = userData.storage_limit_gb ? `${userData.storage_limit_gb} GB` : 'N/A (API needed)';
+                if (dashMessagesRemainingEl) {
+                    dashMessagesRemainingEl.textContent = userData.messages_remaining !== null 
+                        ? String(userData.messages_remaining)
+                        : 'N/A';
+                }
+                if (dashStorageUsedEl) {
+                    dashStorageUsedEl.textContent = formatBytes(userData.uploaded_storage_bytes || 0);
+                }
+                if (dashStorageLimitEl) {
+                    dashStorageLimitEl.textContent = userData.storage_limit_gb !== null 
+                        ? `${userData.storage_limit_gb} GB` 
+                        : (userData.membership_type === 'premium' ? '1 GB' : '0 GB');
+                }
 
-
-                // Cập nhật Đồng hồ Đếm ngược và Nút Hành động Chính (Sẽ cần logic phức tạp hơn)
-                updateCountdownAndAction(userData.account_status, userData.next_clc_prompt_at, userData.wct_active_ends_at);
+                updateCountdownAndAction(
+                    userData.account_status, 
+                    userData.next_clc_prompt_at, 
+                    userData.wct_active_ends_at
+                );
                 
-                // Fetch và cập nhật Message Overview (Sẽ cần API riêng)
-                fetchAndDisplayMessageOverview();
+                // Gọi fetchAndDisplayMessageOverview VÀ fetchAndUpdateUnreadCount sau khi userData đã được tải
+                await fetchAndDisplayMessageOverview(); // Sử dụng await để đảm bảo thứ tự nếu cần
+                await fetchAndUpdateUnreadCount();
 
-                // Fetch và cập nhật số tin nhắn In-App chưa đọc
-                fetchAndUpdateUnreadCount();
-
-            } else if (response.status === 401) { // Unauthorized - Token không hợp lệ hoặc hết hạn
+            } else if (response.status === 401) {
                 console.log("Token invalid or expired, redirecting to signin.");
                 localStorage.removeItem('accessToken');
                 localStorage.removeItem('refreshToken');
                 window.location.href = '/signin.html?status=session_expired';
             } else {
-                console.error("Failed to fetch user data:", response.status, await response.text());
+                const errorText = await response.text();
+                console.error("Failed to fetch user data:", response.status, errorText);
                 if (welcomeMessageEl) welcomeMessageEl.textContent = "Welcome!";
                 if (accountStatusEl) accountStatusEl.textContent = "Error loading status";
-                 if (headerUserIdentifier) headerUserIdentifier.textContent = "User";
+                if (headerUserIdentifier) headerUserIdentifier.textContent = "User";
             }
         } catch (error) {
             console.error("Error fetching user data:", error);
             if (welcomeMessageEl) welcomeMessageEl.textContent = "Welcome!";
             if (accountStatusEl) accountStatusEl.textContent = "Error loading status";
-            // Có thể redirect về signin nếu có lỗi nghiêm trọng
-            // localStorage.removeItem('accessToken');
-            // window.location.href = '/signin.html?status=error_loading_dashboard';
         }
     }
 
@@ -148,7 +153,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     }
 
-    // --- Đồng hồ đếm ngược và Nút Hành động ---
     let countdownInterval;
     function updateCountdownAndAction(accountStatus, nextClcPromptAt, wctActiveEndsAt, nextFnsSendAt = null) {
         if (countdownInterval) clearInterval(countdownInterval);
@@ -159,45 +163,57 @@ document.addEventListener('DOMContentLoaded', async () => {
         let actionButtonText = "";
         let actionButtonVisible = false;
         let actionButtonHandler = null;
+        
+        const currentMainActionButton = document.getElementById('mainActionButton');
 
         if (accountStatus === 'ANS_CLC' && nextClcPromptAt) {
             targetTime = new Date(nextClcPromptAt);
             labelText = "Next check-in prompt in:";
-            actionButtonVisible = false; // Nút check-in bị disable trong CLC
+            actionButtonVisible = false;
         } else if (accountStatus === 'ANS_WCT' && wctActiveEndsAt) {
             targetTime = new Date(wctActiveEndsAt);
-            labelText = "Check-in window closes in (IM will be sent):"; // Hoặc "IM will be sent in:"
+            labelText = "Check-in window closes in:";
             actionButtonText = "Check-in Now";
             actionButtonVisible = true;
             actionButtonHandler = handleCheckIn;
-        } else if (accountStatus === 'FNS' && nextFnsSendAt) { // Giả sử có nextFnsSendAt
-            targetTime = new Date(nextFnsSendAt);
-            labelText = "Next message will be sent in:";
+        } else if (accountStatus === 'FNS') {
+            if (nextFnsSendAt) {
+                targetTime = new Date(nextFnsSendAt);
+                labelText = "Next message will be sent in:";
+            } else {
+                targetTime = null;
+                labelText = "Account is Frozen. Messages are being processed.";
+                countdownTimerEl.textContent = "PROCESSING";
+            }
             actionButtonText = "STOP FNS";
             actionButtonVisible = true;
             actionButtonHandler = handleStopFns;
         } else if (accountStatus === 'INS') {
             labelText = "No active message schedule. Create an Initial Message to start.";
             countdownTimerEl.textContent = "N/A";
-            actionButtonText = "Create Initial Message"; // Link đến trang tạo IM
+            actionButtonText = "Create Initial Message";
             actionButtonVisible = true;
             actionButtonHandler = () => { window.location.href = '/cron-message.html?type=im'; };
         } else {
-            labelText = "No active schedule or status unclear.";
+            labelText = "Account status is unclear or no active schedule.";
             countdownTimerEl.textContent = "--:--:--";
-             actionButtonVisible = false;
+            actionButtonVisible = false;
         }
 
         countdownLabelEl.textContent = labelText;
-        if (actionButtonVisible) {
-            mainActionButton.textContent = actionButtonText;
-            mainActionButton.style.display = 'block';
-            // Gỡ bỏ event listener cũ và thêm mới
-            mainActionButton.replaceWith(mainActionButton.cloneNode(true)); // Cách đơn giản để xóa listener
-            document.getElementById('mainActionButton').addEventListener('click', actionButtonHandler);
 
-        } else {
-            mainActionButton.style.display = 'none';
+        if (currentMainActionButton) {
+            if (actionButtonVisible) {
+                currentMainActionButton.textContent = actionButtonText;
+                currentMainActionButton.style.display = 'block';
+                if (actionButtonHandler) {
+                    const freshButton = currentMainActionButton.cloneNode(true);
+                    currentMainActionButton.parentNode.replaceChild(freshButton, currentMainActionButton);
+                    freshButton.addEventListener('click', actionButtonHandler);
+                }
+            } else {
+                currentMainActionButton.style.display = 'none';
+            }
         }
         
         if (targetTime) {
@@ -207,10 +223,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (distance < 0) {
                     clearInterval(countdownInterval);
-                    countdownTimerEl.textContent = "EXPIRED/SENDING";
-                    countdownLabelEl.textContent = "Process triggered or schedule ended.";
-                    // TODO: Có thể fetch lại user data để cập nhật trạng thái
-                    fetchAndDisplayUserData(); // Tải lại dữ liệu khi countdown kết thúc
+                    countdownTimerEl.textContent = "EXPIRED/TRIGGERED";
+                    if (accountStatus === 'ANS_WCT') {
+                        countdownLabelEl.textContent = "Check-in window closed. Processing messages if not checked-in.";
+                    } else if (accountStatus === 'ANS_CLC') {
+                        countdownLabelEl.textContent = "Check-in prompt period should have started.";
+                    } else {
+                        countdownLabelEl.textContent = "Process triggered or schedule ended.";
+                    }
+                    fetchAndDisplayUserData(); 
                     return;
                 }
 
@@ -225,65 +246,67 @@ document.addEventListener('DOMContentLoaded', async () => {
                 countdownTimerEl.textContent = countdownText;
 
             }, 1000);
+        } else if (accountStatus !== 'FNS' || (accountStatus === 'FNS' && !nextFnsSendAt)) { 
+            if(countdownTimerEl && accountStatus !== 'INS' && (accountStatus !== 'FNS' || !nextFnsSendAt)) {
+                countdownTimerEl.textContent = "--:--:--";
+            }
         }
     }
 
     function handleCheckIn() {
-        // TODO: Implement check-in logic (call API, có thể cần PIN)
         alert("Check-in button clicked! (Logic to be implemented - Call API /api/users/check-in)");
-        // Sau khi check-in thành công, nên fetchAndDisplayUserData();
     }
 
     function handleStopFns() {
-        // TODO: Implement stop FNS logic (call API, yêu cầu PIN)
         alert("STOP FNS button clicked! (Logic to be implemented - Call API /api/users/stop-fns)");
-        // Sau khi dừng FNS thành công, nên fetchAndDisplayUserData();
     }
     
     // --- Fetch Message Overview ---
     async function fetchAndDisplayMessageOverview() {
-        // TODO: Tạo API backend GET /api/messages/overview
-        // API này sẽ trả về số lượng IM (status), FM (active/inactive), SCM (active/inactive)
-        // Ví dụ response:
-        // { 
-        //   "im_status": "Active" | "Inactive" | "Not Set",
-        //   "fm_active_count": 2,
-        //   "fm_inactive_count": 1,
-        //   "scm_active_count": 0,
-        //   "scm_inactive_count": 1 
-        // }
-        if (imStatusEl) imStatusEl.textContent = "N/A (API needed)";
-        if (fmActiveCountEl) fmActiveCountEl.textContent = "0 (API needed)";
-        if (fmInactiveCountEl) fmInactiveCountEl.textContent = "0 (API needed)";
-        if (scmActiveCountEl) scmActiveCountEl.textContent = "0 (API needed)";
-        if (scmInactiveCountEl) scmInactiveCountEl.textContent = "0 (API needed)";
-    }
+        // Xóa các giá trị "API needed" cũ
+        if (imStatusEl) imStatusEl.textContent = "Loading...";
+        if (fmActiveCountEl) fmActiveCountEl.textContent = "Loading...";
+        if (fmInactiveCountEl) fmInactiveCountEl.textContent = "Loading...";
+        if (scmActiveCountEl) scmActiveCountEl.textContent = "Loading...";
+        if (scmInactiveCountEl) scmInactiveCountEl.textContent = "Loading...";
 
-    // --- Fetch Unread In-App Message Count ---
-    async function fetchAndUpdateUnreadCount() {
-        if (!inAppUnreadCountSpan) return;
         try {
-            const response = await fetch('/api/messaging/unread-count', { // Endpoint API cần tạo
+            const response = await fetch('/api/messages/overview', {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
             if (response.ok) {
-                const data = await response.json();
-                const count = data.unread_count || 0;
-                inAppUnreadCountSpan.textContent = count;
-                inAppUnreadCountSpan.classList.remove('bg-danger', 'bg-success', 'bg-secondary');
-                if (count > 0) {
-                    inAppUnreadCountSpan.classList.add('bg-danger');
-                    inAppUnreadCountSpan.style.display = 'inline-block';
-                } else {
-                    inAppUnreadCountSpan.classList.add('bg-success'); // Hoặc một màu trung tính
-                    inAppUnreadCountSpan.style.display = 'inline-block'; // Vẫn hiển thị số 0
-                }
-            } else { inAppUnreadCountSpan.style.display = 'none'; }
-        } catch (error) { console.error("Error fetching unread in-app messages:", error); if(inAppUnreadCountSpan) inAppUnreadCountSpan.style.display = 'none'; }
+                const overviewData = await response.json();
+                if (imStatusEl) imStatusEl.textContent = overviewData.im_status || "N/A";
+                if (fmActiveCountEl) fmActiveCountEl.textContent = String(overviewData.fm_active_count);
+                if (fmInactiveCountEl) fmInactiveCountEl.textContent = String(overviewData.fm_inactive_count);
+                if (scmActiveCountEl) scmActiveCountEl.textContent = String(overviewData.scm_active_count);
+                if (scmInactiveCountEl) scmInactiveCountEl.textContent = String(overviewData.scm_inactive_count);
+            } else {
+                console.error("Failed to fetch message overview:", response.status);
+                if (imStatusEl) imStatusEl.textContent = "Error";
+                // Có thể set các count về "Error" hoặc "-"
+            }
+        } catch (error) {
+            console.error("Error fetching message overview:", error);
+            if (imStatusEl) imStatusEl.textContent = "Error";
+        }
     }
 
+    // --- Fetch Unread In-App Message Count (Placeholder) ---
+    async function fetchAndUpdateUnreadCount() {
+        if (!inAppUnreadCountSpan) return;
+        const count = 0; 
+        inAppUnreadCountSpan.textContent = count > 99 ? "99+" : String(count);
+        inAppUnreadCountSpan.classList.remove('bg-danger', 'bg-success', 'bg-secondary');
+        if (count > 0) {
+            inAppUnreadCountSpan.classList.add('bg-danger');
+            inAppUnreadCountSpan.style.display = 'inline-block';
+        } else {
+            inAppUnreadCountSpan.classList.add('bg-secondary'); 
+            inAppUnreadCountSpan.style.display = 'inline-block';
+        }
+    }
 
-    // --- Event Listeners cho Quick Actions ---
     if (createCronMessageBtn) {
         createCronMessageBtn.onclick = () => { window.location.href = '/cron-message.html'; };
     }
@@ -292,37 +315,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (uploadFileQuickBtn) {
         uploadFileQuickBtn.onclick = async () => {
-            // Cần kiểm tra membership_type từ userData (đã fetch trước đó)
             const userMembership = dashMembershipTypeEl ? dashMembershipTypeEl.textContent.toLowerCase() : 'free';
             if (userMembership !== 'premium') {
                 alert("File upload is a Premium feature. Please upgrade your account.");
-                // TODO: Chuyển hướng đến trang nâng cấp hoặc hiển thị modal
             } else {
                 window.location.href = '/upload-attach-file.html';
             }
         };
     }
 
-    // --- Event Listener cho Logout ---
     if (logoutButton) {
         logoutButton.addEventListener('click', async (e) => {
             e.preventDefault();
             console.log("Logout button clicked");
+            try {
+                const signOutResponse = await fetch('/api/auth/signout', {
+                    method: 'POST', 
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if(signOutResponse.ok){
+                    console.log("Successfully signed out from backend.");
+                } else {
+                    console.warn("Backend signout call failed or not implemented, proceeding with client-side logout.");
+                }
+            } catch (err) { console.error("Error calling signout API:", err); }
+            
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            // TODO: Gọi API backend /api/auth/signout để vô hiệu hóa token phía server (nếu cần)
-            // try {
-            //     await fetch('/api/auth/signout', { 
-            //         method: 'POST', 
-            //         headers: { 'Authorization': `Bearer ${accessToken}` } // Gửi token hiện tại để backend blacklist
-            //     });
-            // } catch (err) { console.error("Error calling signout API:", err); }
             window.location.href = '/signin.html?status=signout_success';
         });
     }
 
-    // --- Khởi tạo lần đầu ---
-    fetchAndDisplayUserData(); // Gọi hàm để tải dữ liệu user và cập nhật UI
+    fetchAndDisplayUserData();
 
-    console.log("--- dashboard.js DOMContentLoaded event listener finished (v1.0) ---");
+    console.log("--- dashboard.js DOMContentLoaded event listener finished (v1.2) ---");
 });
