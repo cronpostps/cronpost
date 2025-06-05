@@ -1,66 +1,21 @@
+<!-- /frontend/index.html -->
+<!-- version 1.0-->
+
 <!doctype html>
-<html lang="en"> <head>
+<html lang="en">
+<head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CronPost - Let your words travel on scheduled journey</title>
-
     <link rel="stylesheet" href="css/bootstrap.min.css">
-    <!-- <link rel="stylesheet" href="css/font-awesome.min.css"> -->
-    <link rel="stylesheet" href="css/simple-line-icons.css">
-    <!-- <link rel="stylesheet" href="css/animate.css"> -->
-    <!-- <link rel="stylesheet" href="css/templatemo_style.css"> -->
-    <link rel="stylesheet" href="css/style.css"> </head>
-
-    <body class="theme-dark">
-	<header id="main-header" class="site-header container animated fadeInDown">
-        <div class="header-wrapper">
-            <div class="row">
-                <div class="col-md-4 col-xs-8"> <div class="site-branding">
-                        <a href="/"><h1>CronPost</h1></a>
-                    </div>
-                </div>
-                <a href="#" class="toggle-nav hidden-md hidden-lg col-xs-4 text-right"> <i class="fa fa-bars"></i>
-                </a>
-                <div class="col-md-8">
-					<nav id="nav" class="main-navigation hidden-xs hidden-sm">
-						<ul class="main-menu">
-							<li class="dropdown">
-								<a href="#" id="languageDropdownDesktop" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-									<span id="currentLangDesktop">EN</span> <span class="caret"></span>
-								</a>
-								<ul class="dropdown-menu" aria-labelledby="languageDropdownDesktop">
-									<li><a href="#" onclick="changeLanguage('en', 'EN')">EN</a></li>
-									<li><a href="#" onclick="changeLanguage('vi', 'VI')">VI</a></li>
-								</ul>
-							</li>
-							<li><a href="/signin">Sign In</a></li>
-							<li><a href="/signup" class="cta-button-nav">Sign Up</a></li>
-						</ul>
-					</nav>
-
-					<nav class="main-navigation menu-responsive hidden-md hidden-lg">
-						<ul class="main-menu">
-							<li><a href="/signin">Sign In</a></li>
-							<li><a href="/signup">Sign Up</a></li>
-							<li class="dropdown">
-								<a href="#" id="languageDropdownMobile" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">
-									<span id="currentLangMobile">EN</span> <span class="caret"></span>
-								</a>
-								<ul class="dropdown-menu" aria-labelledby="languageDropdownMobile">
-									<li><a href="#" onclick="changeLanguage('en', 'EN')">EN</a></li>
-									<li><a href="#" onclick="changeLanguage('vi', 'VI')">VI</a></li>
-									<!-- Sau này có thể thêm các ngôn ngữ khác -->
-								</ul>
-							</li>
-						</ul>
-					</nav>
-                </div>
-            </div>
-        </div>
-    </header>
-
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .fa-bars::before { content: "\2630"; }
+    </style>
+</head>
+<body class="theme-dark">
     <main id="main-content">
-
+<!--#include virtual="/_header.html" -->
         <section id="hero" class="hero-section text-center section-divider container">
             <div class="container">
                 <h1>Let Your Words Travel On Scheduled Journey.</h1>
@@ -74,22 +29,22 @@
             <div class="container">
                 <h2 class="section-title">How CronPost Works?</h2>
                 <div class="steps-container row">
-                    <div class="step col-md-3 col-sm-6 animated fadeInUp" data-wow-delay="0.2s">
+                    <div class="step col-md-3 col-sm-6"> 
                         <div class="step-icon">&gt;_</div>
                         <h3>1. Create & Set Up</h3>
                         <p>Write your messages, choose recipients, and define your preferred check-in schedule.</p>
                     </div>
-                    <div class="step col-md-3 col-sm-6 animated fadeInUp" data-wow-delay="0.4s">
+                    <div class="step col-md-3 col-sm-6">
                         <div class="step-icon">#</div>
                         <h3>2. System Monitors</h3>
                         <p>CronPost begins monitoring your check-in schedule. Simply "check in" periodically to confirm you're active.</p>
                     </div>
-                    <div class="step col-md-3 col-sm-6 animated fadeInUp" data-wow-delay="0.6s">
+                    <div class="step col-md-3 col-sm-6">
                         <div class="step-icon">!</div>
                         <h3>3. Inactivity Detected?</h3>
                         <p>If you miss your scheduled check-ins after reminders, the system understands you may no longer be able to interact.</p>
                     </div>
-                    <div class="step col-md-3 col-sm-6 animated fadeInUp" data-wow-delay="0.8s">
+                    <div class="step col-md-3 col-sm-6">
                         <div class="step-icon">$</div>
                         <h3>4. Messages Delivered</h3>
                         <p>Your pre-scheduled messages are automatically sent to your chosen recipients, just as you intended.</p>
@@ -102,15 +57,15 @@
             <div class="container">
                 <h2 class="section-title">What Can CronPost Do For You?</h2>
                 <div class="stories-container row">
-                    <div class="story col-md-4 col-sm-6 animated zoomIn" data-wow-delay="0.3s">
+                    <div class="story col-md-4 col-sm-6">
                         <h4>Legacy & Memories</h4>
                         <p>"Send birthday wishes to your grandchildren, even years from now. Share memories and advice for future generations."</p>
                     </div>
-                    <div class="story col-md-4 col-sm-6 animated zoomIn" data-wow-delay="0.6s">
+                    <div class="story col-md-4 col-sm-6">
                         <h4>Important Information</h4>
                         <p>"Ensure crucial documents or instructions are delivered securely if you're unexpectedly incapacitated."</p>
                     </div>
-                    <div class="story col-md-4 col-sm-12 animated zoomIn" data-wow-delay="0.9s">
+                    <div class="story col-md-4 col-sm-12">
                         <h4>Peace of Mind</h4>
                         <p>"Plan for the unforeseen. Set up your future messages today and rest assured they will be delivered."</p>
                     </div>
@@ -119,43 +74,19 @@
         </section>
 
         <section id="final-cta" class="final-cta-section text-center section-divider container">
-            <div class="container animated fadeInUp">
+            <div class="container">
                 <h2>Ready to Let Your Words Travel On?</h2>
                 <p>Start with CronPost today and ensure your important thoughts and wishes will always be shared, no matter what the future holds.</p>
-                <a href="/signup" class="cta-button-main">Get Started Now</a>
+                <a href="signup.html" class="cta-button-main">Get Started Now</a>
                 <br>
                 <br>
                 <br>
             </div>
         </section>
-
     </main>
-
-<footer id="main-footer" class="site-footer container">
-    <div class="container"> 
-        <div class="footer-copyright"> 
-            <p>&copy; <span id="current-year">2025</span> CronPost. All Rights Reserved.</p>
-        </div>
-        <nav class="cronpost-footer-nav">
-            <ul>
-                <li><a href="/terms">Terms of Service</a></li>
-                <li><a href="/privacy">Privacy Policy</a></li>
-                <li><a href="/tips">Tips & Help</a></li>
-                <li><a href="/about">About Us</a></li>
-            </ul>
-        </nav>
-        <div class="footer-theme-selector">
-            <select id="theme-dropdown">
-                <option value="theme-dark">Dark</option>
-                <option value="theme-light">Light</option>
-            </select>
-        </div>
-    </div>
-</footer>
-
-<script src="js/jquery.min.js"></script>
-<script src="js/bootstrap.min.js"></script> 
-<!-- <script src="js/templatemo_custom.js"></script>  -->
+    <!--#include virtual="/_footer.html" -->
+<script src="js/bootstrap.bundle.min.js"></script>
+<script src="js/bootstrap.min.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

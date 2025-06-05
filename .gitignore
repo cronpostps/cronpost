@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+# ... (các dòng đã có trong .gitignore của Python) ...
+
+# Custom ignores
+backend/.env
+n8n_data/database.sqlite # Có thể bạn cũng muốn bỏ qua file database của n8n
+# __pycache__/ # Đã có trong template Python .gitignore
