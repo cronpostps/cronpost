@@ -11,7 +11,7 @@ from typing import Optional, List, Any
 from datetime import datetime, timezone as dt_timezone, date as py_date, time as py_time 
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import ValidationError
+from pydantic import ValidationError, BaseModel, EmailStr, Field  # BaseModel was missing
 from ..models.message_models import (
     InitialMessageCreateUpdateRequest,
     InitialMessageWithScheduleResponse,
@@ -78,7 +78,7 @@ async def _get_im_sent_at_utc(user_id: uuid.UUID, db: AsyncSession) -> Optional[
     return None
 
 
-class MessageOverviewResponse(BaseModel): # Giữ nguyên
+class MessageOverviewResponse(BaseModel):
     im_status: str
     fm_active_count: int
     fm_inactive_count: int
@@ -228,7 +228,7 @@ async def create_or_update_initial_message( # Giữ nguyên
         logger.error(f"ValueError from calculate_next_clc_prompt_at for {current_user.email}: {ve}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
-        logger.error(f"Error from calculate_next_clc_prompt_at for {current_user.email}: {e}", exc_info=True)
+        logger.error(f"Error from calculate_next_cllc_prompt_at for {current_user.email}: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error calculating schedule.")
 
     im_stmt_db = select(Message).where(Message.user_id == current_user.id, Message.is_initial_message == True)
