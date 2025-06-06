@@ -1,18 +1,74 @@
 // frontend/js/dashboard.js
-// Version: 1.6 (Implemented handleStopFns function to call API)
+// Version: 1.8.1
 
-console.log("--- dashboard.js SCRIPT STARTED (v1.6) ---");
+console.log("--- dashboard.js SCRIPT STARTED (v1.8.1) ---");
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("--- dashboard.js DOMContentLoaded event fired (v1.6) ---");
+    console.log("--- dashboard.js DOMContentLoaded event fired (v1.8.1) ---");
 
-    const accessToken = localStorage.getItem('accessToken');
-    if (!accessToken) {
-        console.log("No access token found, redirecting to signin.");
-        window.location.href = '/signin.html?status=session_expired';
-        return;
+    // --- START: ROBUST TOKEN HANDLING ---
+    const url = new URL(window.location.href);
+    const tokenFromUrl = url.searchParams.get("token");
+
+    if (tokenFromUrl) {
+        console.log("DASHBOARD (1.8.1): Token found in URL:", tokenFromUrl.substring(0, 15) + "..."); // Log a snippet
+        localStorage.setItem('accessToken', tokenFromUrl);
+        console.log("DASHBOARD (1.8.1): Token has been set in localStorage.");
+
+        // Clean the token from the URL more safely
+        url.searchParams.delete("token");
+        window.history.replaceState({}, document.title, url.toString());
+        console.log("DASHBOARD (1.8.1): URL has been cleaned.");
     }
 
+    const accessToken = localStorage.getItem('accessToken');
+    console.log("DASHBOARD (1.8.1): Checking for accessToken in localStorage. Found:", !!accessToken);
+
+    if (!accessToken) {
+        console.error("DASHBOARD (1.8.1): No accessToken found after check. Redirecting to signin.");
+        window.location.href = '/signin.html?status=session_expired';
+        return; // Stop execution
+    }
+    // --- END: ROBUST TOKEN HANDLING ---
+
+    let clockInterval;
+    function updateUserClock(userTimezone) {
+        if (clockInterval) clearInterval(clockInterval);
+        
+        const clockEl = document.getElementById('userCurrentTime');
+        if (!clockEl) return;
+        if (!userTimezone) {
+            clockEl.textContent = "Timezone not set";
+            return;
+        }
+
+        const updateClock = () => {
+            try {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString("en-GB", {
+                    timeZone: userTimezone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                const dateString = now.toLocaleDateString("en-GB", {
+                    timeZone: userTimezone,
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                });
+                clockEl.textContent = `${timeString} - ${dateString} (${userTimezone})`;
+            } catch (e) {
+                console.error("Error updating clock with timezone:", userTimezone, e);
+                clockEl.textContent = `Invalid Timezone: ${userTimezone}`;
+                clearInterval(clockInterval);
+            }
+        };
+        
+        updateClock();
+        clockInterval = setInterval(updateClock, 1000);
+    }
+    
     let currentUserSettings = {
         use_pin_for_all_actions: false
     };
@@ -100,12 +156,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (dashMessagesRemainingEl) dashMessagesRemainingEl.textContent = userData.messages_remaining !== null ? String(userData.messages_remaining) : 'N/A';
                 if (dashStorageUsedEl) dashStorageUsedEl.textContent = formatBytes(userData.uploaded_storage_bytes || 0);
                 if (dashStorageLimitEl) dashStorageLimitEl.textContent = userData.storage_limit_gb !== null ? `${userData.storage_limit_gb} GB` : (userData.membership_type === 'premium' ? '1 GB' : '0 GB');
-
+                updateUserClock(userData.timezone); 
                 updateCountdownAndAction(
                     userData.account_status, 
                     userData.next_clc_prompt_at, 
                     userData.wct_active_ends_at,
-                    userData.next_fns_send_at // Truyền giá trị này nếu API /users/me cung cấp
+                    userData.next_fns_send_at
                 );
                 
                 await fetchAndDisplayMessageOverview();
@@ -171,17 +227,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             actionButtonVisible = true;
             actionButtonHandler = handleCheckIn;
         } else if (accountStatus === 'FNS') {
-            if (nextFnsSendAt) { // Sử dụng next_fns_send_at nếu có
+            if (nextFnsSendAt) {
                 targetTime = new Date(nextFnsSendAt);
-                labelText = "Next message will be sent in:";
+                // Cập nhật labelText theo tài liệu 
+                labelText = "The next message will be sent in:";
+                if(countdownTimerEl) countdownTimerEl.textContent = "Calculating..."; // Tạm thời
             } else {
                 targetTime = null;
                 labelText = "Account is Frozen. Messages are being processed.";
                 if(countdownTimerEl) countdownTimerEl.textContent = "PROCESSING";
             }
-            actionButtonText = "STOP FNS"; // Theo tài liệu, nút này là "STOP Sending"
+            // Cập nhật actionButtonText theo tài liệu 
+            actionButtonText = "STOP Sending";
             actionButtonVisible = true;
-            actionButtonHandler = handleStopFns; // Gán handler mới
+            actionButtonHandler = handleStopFns;
         } else if (accountStatus === 'INS') {
             labelText = "No active message schedule. Create an Initial Message to start.";
             if(countdownTimerEl) countdownTimerEl.textContent = "N/A";
@@ -459,5 +518,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     fetchAndDisplayUserData();
 
-    console.log("--- dashboard.js DOMContentLoaded event listener finished (v1.6) ---");
+    console.log("--- dashboard.js DOMContentLoaded event listener finished (v1.8.1) ---");
 });

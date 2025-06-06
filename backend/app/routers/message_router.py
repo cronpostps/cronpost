@@ -36,7 +36,6 @@ from ..services.schedule_service import calculate_next_clc_prompt_at, calculate_
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
-    prefix="/messages",
     tags=["Messages"],
     dependencies=[Depends(get_current_active_user)]
 )
