@@ -1,5 +1,8 @@
 # /backend/app/db/models.py
-# Version: 2.4 (Added missing fields to InAppMessage model)
+# Version: 2.6.0 (Synced with init.sql v2.6.0)
+# Changelog:
+# - Added `is_admin` flag to User model.
+# - Updated FmSchedule model to use `repeat_number` and removed redundant fields.
 
 import enum
 import uuid
@@ -15,7 +18,7 @@ from sqlalchemy.sql import text
 
 from .database import Base
 
-# --- Định nghĩa các lớp Python Enum (Giữ nguyên như v2.1) ---
+# --- Định nghĩa các lớp Python Enum ---
 class UserAccountStatusEnum(str, enum.Enum): INS='INS'; ANS_CLC='ANS_CLC'; ANS_WCT='ANS_WCT'; FNS='FNS'
 class UserMembershipTypeEnum(str, enum.Enum): free='free'; premium='premium'
 class CLCTypeEnum(str, enum.Enum): every_day='every_day'; specific_days='specific_days'; day_of_week='day_of_week'; date_of_month='date_of_month'; date_of_year='date_of_year'; specific_date_in_year='specific_date_in_year'
@@ -64,27 +67,28 @@ class User(Base):
     user_telegram_username = Column(Text)
     telegram_link_status = Column(SQLAlchemyEnum(OttOptInStatusEnum, name='ott_opt_in_status_enum', create_type=False), default=OttOptInStatusEnum.unlinked, nullable=False)
     provider = Column(Text, nullable=True)
-    uploaded_storage_bytes = Column(BigInteger, default=0, nullable=False) # THÊM MỚI
+    is_admin = Column(Boolean, default=False, nullable=False)
+    uploaded_storage_bytes = Column(BigInteger, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
 
     # Relationships
     email_confirmations = relationship("EmailConfirmation", back_populates="user", cascade="all, delete-orphan")
-    password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan") # THÊM MỚI
+    password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
     login_history = relationship("LoginHistory", back_populates="user", cascade="all, delete-orphan")
     configuration = relationship("UserConfiguration", uselist=False, back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     checkin_logs = relationship("CheckinLog", back_populates="user", cascade="all, delete-orphan")
     ott_optins = relationship("ReceiverOttOptin", back_populates="user", cascade="all, delete-orphan")
     review = relationship("UserReview", uselist=False, back_populates="user", cascade="all, delete-orphan")
-    uploaded_files = relationship("UploadedFile", back_populates="user", cascade="all, delete-orphan") # THÊM MỚI
-    message_threads_as_user1 = relationship("MessageThread", foreign_keys="[MessageThread.user1_id]", back_populates="user1", cascade="all, delete-orphan") # THÊM MỚI
-    message_threads_as_user2 = relationship("MessageThread", foreign_keys="[MessageThread.user2_id]", back_populates="user2", cascade="all, delete-orphan") # THÊM MỚI
-    sent_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.sender_id]", back_populates="sender", cascade="all, delete-orphan") # THÊM MỚI
-    received_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.receiver_id]", back_populates="receiver", cascade="all, delete-orphan") # THÊM MỚI
+    uploaded_files = relationship("UploadedFile", back_populates="user", cascade="all, delete-orphan")
+    message_threads_as_user1 = relationship("MessageThread", foreign_keys="[MessageThread.user1_id]", back_populates="user1", cascade="all, delete-orphan")
+    message_threads_as_user2 = relationship("MessageThread", foreign_keys="[MessageThread.user2_id]", back_populates="user2", cascade="all, delete-orphan")
+    sent_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.sender_id]", back_populates="sender", cascade="all, delete-orphan")
+    received_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.receiver_id]", back_populates="receiver", cascade="all, delete-orphan")
 
 
-class EmailConfirmation(Base): # Giữ nguyên
+class EmailConfirmation(Base):
     __tablename__ = 'email_confirmations'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
@@ -97,7 +101,7 @@ class EmailConfirmation(Base): # Giữ nguyên
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="email_confirmations")
 
-class PasswordResetToken(Base): # Giữ nguyên từ v2.1
+class PasswordResetToken(Base):
     __tablename__ = 'password_reset_tokens'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
@@ -106,9 +110,9 @@ class PasswordResetToken(Base): # Giữ nguyên từ v2.1
     is_used = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
-    user = relationship("User", back_populates="password_reset_tokens") # Thêm back_populates
+    user = relationship("User", back_populates="password_reset_tokens")
 
-class LoginHistory(Base): # Giữ nguyên, không thêm login_successful
+class LoginHistory(Base):
     __tablename__ = 'login_history'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
@@ -119,7 +123,7 @@ class LoginHistory(Base): # Giữ nguyên, không thêm login_successful
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="login_history")
 
-class UserConfiguration(Base): # Giữ nguyên
+class UserConfiguration(Base):
     __tablename__ = 'user_configurations'
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     clc_type = Column(SQLAlchemyEnum(CLCTypeEnum, name='clc_type_enum', create_type=False), default=CLCTypeEnum.every_day, nullable=False)
@@ -134,7 +138,7 @@ class UserConfiguration(Base): # Giữ nguyên
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="configuration")
 
-class UploadedFile(Base): # MODEL MỚI
+class UploadedFile(Base):
     __tablename__ = 'uploaded_files'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
@@ -146,11 +150,11 @@ class UploadedFile(Base): # MODEL MỚI
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="uploaded_files")
-    messages_attached_to = relationship("Message", back_populates="attachment_file") # Relationship đến Message
-    in_app_messages_attached_to = relationship("InAppMessage", back_populates="attachment_file") # Relationship đến InAppMessage
+    messages_attached_to = relationship("Message", back_populates="attachment_file")
+    in_app_messages_attached_to = relationship("InAppMessage", back_populates="attachment_file")
 
 
-class Message(Base): # Cập nhật
+class Message(Base):
     __tablename__ = 'messages'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
@@ -158,17 +162,16 @@ class Message(Base): # Cập nhật
     message_title = Column(Text)
     message_content = Column(Text, nullable=False)
     is_initial_message = Column(Boolean, default=False, nullable=False)
-    attachment_file_id = Column(UUID(as_uuid=True), ForeignKey('uploaded_files.id', ondelete="SET NULL"), nullable=True) # THÊM MỚI
+    attachment_file_id = Column(UUID(as_uuid=True), ForeignKey('uploaded_files.id', ondelete="SET NULL"), nullable=True)
     overall_send_status = Column(SQLAlchemyEnum(MessageOverallStatusEnum, name='message_overall_status_enum', create_type=False), default=MessageOverallStatusEnum.pending, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="messages")
     receivers = relationship("MessageReceiver", back_populates="message", cascade="all, delete-orphan")
     fm_schedule = relationship("FmSchedule", uselist=False, back_populates="message", cascade="all, delete-orphan")
-    attachment_file = relationship("UploadedFile", back_populates="messages_attached_to") # THÊM MỚI
+    attachment_file = relationship("UploadedFile", back_populates="messages_attached_to")
 
-# ... (Các model MessageReceiver, FmSchedule, SendingHistory, CheckinLog, ReceiverOttOptin, UserReview giữ nguyên như v2.1)
-class MessageReceiver(Base): # Giữ nguyên
+class MessageReceiver(Base):
     __tablename__ = 'message_receivers'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), nullable=False)
     receiver_channel = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False)
@@ -177,30 +180,36 @@ class MessageReceiver(Base): # Giữ nguyên
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     message = relationship("Message", back_populates="receivers")
 
-class FmSchedule(Base): # Giữ nguyên
-    __tablename__ = 'fm_schedules'; message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), primary_key=True)
+class FmSchedule(Base):
+    __tablename__ = 'fm_schedules'
+    message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), primary_key=True)
     trigger_type = Column(SQLAlchemyEnum(FMScheduleTriggerTypeEnum, name='fm_schedule_trigger_type_enum', create_type=False), nullable=False)
-    days_after_im_value = Column(Integer); day_of_week_value = Column(SQLAlchemyEnum(DayOfWeekEnum, name='day_of_week_enum', create_type=False))
-    date_of_month_value = Column(Integer); date_of_year_value = Column(Text); specific_date_value = Column(Date)
-    sending_time_of_day = Column(Time, default='09:00:00', nullable=False); repeat_count = Column(Integer, default=0, nullable=False)
-    current_repetition = Column(Integer, default=0, nullable=False); next_send_at = Column(DateTime(timezone=True)); is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    days_after_im_value = Column(Integer)
+    day_of_week_value = Column(SQLAlchemyEnum(DayOfWeekEnum, name='day_of_week_enum', create_type=False))
+    date_of_month_value = Column(Integer)
+    date_of_year_value = Column(Text)
+    specific_date_value = Column(Date)
+    sending_time_of_day = Column(Time, default='09:00:00', nullable=False)
+    repeat_number = Column(Integer, default=1, nullable=False)
+    next_send_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     message = relationship("Message", back_populates="fm_schedule")
 
-class SendingHistory(Base): # Giữ nguyên
+class SendingHistory(Base):
     __tablename__ = 'sending_history'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), nullable=False); receiver_id = Column(UUID(as_uuid=True), ForeignKey('message_receivers.id', ondelete="CASCADE"), nullable=False)
     sending_method = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False); sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     status = Column(SQLAlchemyEnum(SendingAttemptStatusEnum, name='sending_attempt_status_enum', create_type=False), nullable=False); status_details = Column(Text); receiver_address_snapshot = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
 
-class CheckinLog(Base): # Giữ nguyên
+class CheckinLog(Base):
     __tablename__ = 'checkin_log'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False); checkin_timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     method = Column(SQLAlchemyEnum(CheckinMethodEnum, name='checkin_method_enum', create_type=False), nullable=False); created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="checkin_logs")
 
-class ReceiverOttOptin(Base): # Giữ nguyên
+class ReceiverOttOptin(Base):
     __tablename__ = 'receiver_ott_optins'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     sender_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False); receiver_email_identifier = Column(Text, nullable=False)
     channel = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False); platform_specific_id = Column(Text)
@@ -209,16 +218,16 @@ class ReceiverOttOptin(Base): # Giữ nguyên
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="ott_optins")
 
-class UserReview(Base): # Giữ nguyên
+class UserReview(Base):
     __tablename__ = 'user_reviews'; user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     rating_points = Column(SQLAlchemyEnum(RatingPointsEnum, name='rating_points_enum', create_type=False), nullable=False); comment = Column(Text)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     user = relationship("User", back_populates="review")
 
 
-class SystemSetting(Base): # Giữ nguyên
+class SystemSetting(Base):
     __tablename__ = 'system_settings'
-    id = Column(Integer, primary_key=True, autoincrement=True) # Nên có autoincrement=True cho Integer PK
+    id = Column(Integer, primary_key=True, autoincrement=True)
     setting_key = Column(Text, unique=True, nullable=False)
     setting_value = Column(Text); description = Column(Text)
     value_type = Column(Text, default='string', nullable=False)
@@ -226,7 +235,6 @@ class SystemSetting(Base): # Giữ nguyên
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
 
-# --- Các Model MỚI cho In-App Messaging ---
 class MessageThread(Base):
     __tablename__ = 'message_threads'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))

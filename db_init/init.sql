@@ -1,12 +1,12 @@
 -- SQL KHỞI TẠO POSTGRES DATABASE DUY NHẤT
--- VERSION: 2.4.1 (Thêm In-App Messaging, Attachments, cập nhật System Settings)
+-- VERSION: 2.6.0 (Finalized system_settings and all schema updates)
 -- Mô tả: Script này tạo tất cả các kiểu ENUM, bảng, index và trigger cần thiết cho CronPost.
 
 -- KÍCH HOẠT EXTENSION CẦN THIẾT
 CREATE EXTENSION IF NOT EXISTS moddatetime; 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- TẠO CÁC KIỂU ENUM (Giữ nguyên như v2.3)
+-- TẠO CÁC KIỂU ENUM
 CREATE TYPE public.user_account_status_enum AS ENUM ('INS','ANS_CLC','ANS_WCT','FNS');
 CREATE TYPE public.user_membership_type_enum AS ENUM ('free','premium');
 CREATE TYPE public.clc_type_enum AS ENUM ('every_day','specific_days','day_of_week','date_of_month','date_of_year','specific_date_in_year');
@@ -23,7 +23,7 @@ CREATE TYPE public.rating_points_enum AS ENUM ('1','2','3','4','5');
 
 -- TẠO CÁC BẢNG
 
--- Bảng users (Bổ sung uploaded_storage_bytes)
+-- Bảng users
 CREATE TABLE public.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
@@ -55,12 +55,13 @@ CREATE TABLE public.users (
     user_telegram_username TEXT,
     telegram_link_status public.ott_opt_in_status_enum DEFAULT 'unlinked' NOT NULL,
     provider TEXT,
-    uploaded_storage_bytes BIGINT DEFAULT 0 NOT NULL, -- Trường mới cho dung lượng đã upload
+    is_admin BOOLEAN DEFAULT FALSE NOT NULL,
+    uploaded_storage_bytes BIGINT DEFAULT 0 NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng email_confirmations (Giữ nguyên như v2.3)
+-- Bảng email_confirmations
 CREATE TABLE public.email_confirmations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -74,7 +75,7 @@ CREATE TABLE public.email_confirmations (
     CONSTRAINT uq_email_confirmations_token UNIQUE (confirmation_token)
 );
 
--- Bảng login_history (Giữ nguyên như v2.3, không thêm login_successful, failure_reason)
+-- Bảng login_history
 CREATE TABLE public.login_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -85,7 +86,7 @@ CREATE TABLE public.login_history (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng user_configurations (Giữ nguyên như v2.3)
+-- Bảng user_configurations
 CREATE TABLE public.user_configurations (
     user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
     clc_type public.clc_type_enum NOT NULL DEFAULT 'every_day',
@@ -104,20 +105,20 @@ CREATE TABLE public.user_configurations (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng uploaded_files (Bảng MỚI cho file attachments)
+-- Bảng uploaded_files
 CREATE TABLE public.uploaded_files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     original_filename TEXT NOT NULL,
-    stored_filename TEXT NOT NULL UNIQUE, -- Tên file duy nhất trên server hoặc path trên S3
+    stored_filename TEXT NOT NULL UNIQUE,
     filesize_bytes BIGINT NOT NULL,
     mimetype TEXT,
-    storage_location TEXT DEFAULT 'local' NOT NULL, -- Ví dụ: 'local', 's3'
+    storage_location TEXT DEFAULT 'local' NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng messages (Bổ sung attachment_file_id)
+-- Bảng messages
 CREATE TABLE public.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -125,7 +126,7 @@ CREATE TABLE public.messages (
     message_title TEXT,
     message_content TEXT NOT NULL,
     is_initial_message BOOLEAN DEFAULT FALSE NOT NULL,
-    attachment_file_id UUID REFERENCES public.uploaded_files(id) ON DELETE SET NULL, -- Trường mới
+    attachment_file_id UUID REFERENCES public.uploaded_files(id) ON DELETE SET NULL,
     overall_send_status public.message_overall_status_enum DEFAULT 'pending' NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -136,7 +137,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_unique_initial_message
 ON public.messages (user_id)
 WHERE (is_initial_message = TRUE);
 
--- Bảng message_receivers (Giữ nguyên như v2.3)
+-- Bảng message_receivers
 CREATE TABLE public.message_receivers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
@@ -151,7 +152,7 @@ CREATE TABLE public.message_receivers (
     CONSTRAINT uq_message_receiver_channel_address UNIQUE (message_id, receiver_channel, receiver_address)
 );
 
--- Bảng fm_schedules (Giữ nguyên như v2.3)
+-- Bảng fm_schedules
 CREATE TABLE public.fm_schedules (
     message_id UUID PRIMARY KEY REFERENCES public.messages(id) ON DELETE CASCADE,
     trigger_type public.fm_schedule_trigger_type_enum NOT NULL,
@@ -161,13 +162,10 @@ CREATE TABLE public.fm_schedules (
     date_of_year_value TEXT, 
     specific_date_value DATE,
     sending_time_of_day TIME WITHOUT TIME ZONE NOT NULL DEFAULT '09:00:00',
-    repeat_count INT DEFAULT 0 NOT NULL CHECK (repeat_count >= 0 AND repeat_count <= 99),
-    current_repetition INT DEFAULT 0 NOT NULL,
+    repeat_number INT DEFAULT 1 NOT NULL CHECK (repeat_number >= 0 AND repeat_number <= 99),
     next_send_at TIMESTAMPTZ,
-    is_active BOOLEAN DEFAULT TRUE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    CONSTRAINT chk_fm_specific_date_repeat CHECK (NOT (trigger_type = 'specific_date' AND repeat_count != 0))
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 CREATE OR REPLACE FUNCTION public.check_fm_message_not_initial()
@@ -187,7 +185,7 @@ BEFORE INSERT OR UPDATE ON public.fm_schedules
 FOR EACH ROW
 EXECUTE FUNCTION public.check_fm_message_not_initial();
 
--- Bảng sending_history (Giữ nguyên như v2.3)
+-- Bảng sending_history
 CREATE TABLE public.sending_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
@@ -200,7 +198,7 @@ CREATE TABLE public.sending_history (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng checkin_log (Giữ nguyên như v2.3)
+-- Bảng checkin_log
 CREATE TABLE public.checkin_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -209,7 +207,7 @@ CREATE TABLE public.checkin_log (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng receiver_ott_optins (Giữ nguyên như v2.3)
+-- Bảng receiver_ott_optins
 CREATE TABLE public.receiver_ott_optins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sender_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -226,7 +224,7 @@ CREATE TABLE public.receiver_ott_optins (
     CONSTRAINT uq_sender_receiver_email_channel UNIQUE (sender_user_id, receiver_email_identifier, channel)
 );
 
--- Bảng user_reviews (Giữ nguyên như v2.3)
+-- Bảng user_reviews
 CREATE TABLE public.user_reviews (
     user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
     rating_points public.rating_points_enum NOT NULL,
@@ -235,7 +233,7 @@ CREATE TABLE public.user_reviews (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng password_reset_tokens (Giữ nguyên như v2.3)
+-- Bảng password_reset_tokens
 CREATE TABLE public.password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -246,14 +244,14 @@ CREATE TABLE public.password_reset_tokens (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng message_threads (Bảng MỚI cho In-App Messaging)
+-- Bảng message_threads
 CREATE TABLE public.message_threads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user1_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     user2_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    last_message_at TIMESTAMPTZ DEFAULT NOW(), -- Để sắp xếp thread, cập nhật khi có tin nhắn mới
-    user1_last_read_at TIMESTAMPTZ, -- Thời điểm user1 đọc tin nhắn cuối cùng trong thread này
-    user2_last_read_at TIMESTAMPTZ, -- Thời điểm user2 đọc tin nhắn cuối cùng trong thread này
+    last_message_at TIMESTAMPTZ DEFAULT NOW(),
+    user1_last_read_at TIMESTAMPTZ,
+    user2_last_read_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     CONSTRAINT chk_message_thread_distinct_users CHECK (user1_id <> user2_id)
@@ -262,25 +260,25 @@ CREATE TABLE public.message_threads (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_message_thread_users 
 ON public.message_threads (LEAST(user1_id, user2_id), GREATEST(user1_id, user2_id));
 
--- Bảng in_app_messages (Bảng MỚI cho In-App Messaging)
+-- Bảng in_app_messages
 CREATE TABLE public.in_app_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     thread_id UUID NOT NULL REFERENCES public.message_threads(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    receiver_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE, -- Dù có thread_id, vẫn lưu để dễ query
+    receiver_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     sent_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     read_at TIMESTAMPTZ,
-    attachment_file_id UUID REFERENCES public.uploaded_files(id) ON DELETE SET NULL, -- File đính kèm (cho Premium)
+    attachment_file_id UUID REFERENCES public.uploaded_files(id) ON DELETE SET NULL,
     is_deleted_by_sender BOOLEAN DEFAULT FALSE NOT NULL,
     is_deleted_by_receiver BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    CONSTRAINT chk_in_app_message_sender_receiver CHECK (sender_id <> receiver_id) -- User không tự gửi cho mình
+    CONSTRAINT chk_in_app_message_sender_receiver CHECK (sender_id <> receiver_id)
 );
 
 
--- Bảng system_settings (Bổ sung các setting_key còn thiếu)
+-- Bảng system_settings
 CREATE TABLE public.system_settings (
     id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     setting_key TEXT UNIQUE NOT NULL,
@@ -308,13 +306,12 @@ CREATE TRIGGER handle_updated_at_message_threads BEFORE UPDATE ON public.message
 CREATE TRIGGER handle_updated_at_in_app_messages BEFORE UPDATE ON public.in_app_messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 
 -- TẠO CÁC INDEXES
--- ... (Các index hiện có giữ nguyên) ...
 CREATE INDEX IF NOT EXISTS idx_email_confirmations_user_id ON public.email_confirmations(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_confirmations_token ON public.email_confirmations(confirmation_token);
 CREATE INDEX IF NOT EXISTS idx_login_history_user_id_time ON public.login_history(user_id, login_time DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON public.messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_user_id_order ON public.messages(user_id, message_order);
-CREATE INDEX IF NOT EXISTS idx_messages_attachment_file_id ON public.messages(attachment_file_id); -- Index cho attachment
+CREATE INDEX IF NOT EXISTS idx_messages_attachment_file_id ON public.messages(attachment_file_id);
 CREATE INDEX IF NOT EXISTS idx_message_receivers_message_id ON public.message_receivers(message_id);
 CREATE INDEX IF NOT EXISTS idx_message_receivers_channel_address ON public.message_receivers(receiver_channel, receiver_address);
 CREATE INDEX IF NOT EXISTS idx_sending_history_message_id ON public.sending_history(message_id);
@@ -328,7 +325,7 @@ CREATE INDEX IF NOT EXISTS idx_users_user_telegram_id ON public.users(user_teleg
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON public.password_reset_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token_hash ON public.password_reset_tokens(reset_token_hash);
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON public.password_reset_tokens(token_expires_at);
-CREATE INDEX IF NOT EXISTS idx_uploaded_files_user_id ON public.uploaded_files(user_id); -- Index cho uploaded_files
+CREATE INDEX IF NOT EXISTS idx_uploaded_files_user_id ON public.uploaded_files(user_id);
 CREATE INDEX IF NOT EXISTS idx_message_threads_user1_id_user2_id ON public.message_threads(LEAST(user1_id, user2_id), GREATEST(user1_id, user2_id));
 CREATE INDEX IF NOT EXISTS idx_message_threads_last_message_at ON public.message_threads(last_message_at DESC);
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_thread_id_sent_at ON public.in_app_messages(thread_id, sent_at DESC);
@@ -337,7 +334,7 @@ CREATE INDEX IF NOT EXISTS idx_in_app_messages_receiver_id ON public.in_app_mess
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_attachment_file_id ON public.in_app_messages(attachment_file_id);
 
 
--- THÊM DỮ LIỆU MẶC ĐỊNH CHO system_settings (Bổ sung và cập nhật)
+-- THÊM DỮ LIỆU MẶC ĐỊNH CHO system_settings
 INSERT INTO public.system_settings (setting_key, setting_value, description, value_type, admin_editable) VALUES
     ('max_clc_start_offset_years', '100', 'Maximum years user can set CLC start time from now', 'integer', true),
     ('min_clc_start_offset_minutes', '30', 'Minimum minutes user must set CLC start time from now', 'integer', true),
@@ -355,17 +352,23 @@ INSERT INTO public.system_settings (setting_key, setting_value, description, val
     ('min_ans_duration_minutes', '30', 'Admin setting: Minimum duration a user must be in ANS before FNS can trigger (example)', 'integer', true),
     ('max_fns_duration_years', '100', 'Admin setting: Maximum duration an FNS process runs (example)', 'integer', true),
     ('max_message_content_length_free', '5000', 'Max message content length for free users (chars)', 'integer', true),
-    ('max_message_content_length_premium', '5000', 'Max message content length for premium users (chars)', 'integer', true), -- Tài liệu ghi unlimited, nhưng ở đây là 5000
-    ('max_total_messages_free', '10', 'Max total messages for free users', 'integer', true), -- Tài liệu ghi 10
-    ('max_total_messages_premium', '1000', 'Max total messages for premium users', 'integer', true),
-    ('telegram_ott_opt_in_token_validity_hours', '72', 'How long the Telegram OTT opt-in token for receivers is valid (hours)', 'integer', true),
-    ('user_telegram_link_token_validity_minutes', '10', 'How long the token/code for user to link their own Telegram account is valid (minutes)', 'integer', true),
+    ('max_message_content_length_premium', '5000', 'Max message content length for premium users (chars)', 'integer', true),
+    ('max_total_messages_free', '10', 'Max total active messages for free users', 'integer', true),
+    ('max_total_messages_premium', '1000', 'Max total active messages for premium users', 'integer', true),
     ('failed_pin_attempts_lockout_threshold', '5', 'Number of failed PIN attempts before account lockout', 'integer', true),
     ('pin_lockout_duration_minutes', '15', 'Duration in minutes for account lockout due to failed PIN attempts', 'integer', true),
-    ('max_email_attachment_size_mb_premium', '50', 'Max email attachment size in MB for premium users', 'integer', true),
+    ('max_email_attachment_size_mb_premium', '49', 'Max email attachment size in MB for premium users', 'integer', true),
     ('max_total_upload_storage_gb_premium', '1', 'Max total upload storage in GB for premium users', 'integer', true),
     ('inactive_account_cleanup_years_free', '5', 'Years after which an inactive free account (INS) is cleaned up', 'integer', true),
-    ('unused_file_cleanup_years_premium', '5', 'Years after which an unused uploaded file by a premium user is cleaned up', 'integer', true)
+    ('unused_file_cleanup_years_premium', '5', 'Years after which an unused uploaded file by a premium user is cleaned up', 'integer', true),
+    ('scm_min_mins', '30', 'Minimum message sending time since submit (minutes) for SCM', 'integer', true),
+    ('scm_max_mins', '10000', 'Maximum message sending time since submit (minutes) for SCM', 'integer', true),
+    ('scm_repeat_number_max', '99', 'Max repeat number for Simple Cron Messages (SCM)', 'integer', true),
+    ('max_stored_messages_free', '100', 'Maximum messages stored in free account', 'integer', true),
+    ('max_stored_messages_premium', '10000', 'Maximum messages stored in premium account', 'integer', true),
+    ('premium_lifetime_price_usd', '10', 'The lifetime price in USD for the Premium plan', 'float', true),
+    ('email_sending_rate_per_hours', '50', 'System-wide email sending frequency to ensure compliance with SMTP server regulations', 'integer', true),
+    ('wct_final_reminder_minutes', '3', 'Final WCT reminder time before it ends (minutes)', 'integer', true)
 ON CONFLICT (setting_key) DO UPDATE SET 
     setting_value = EXCLUDED.setting_value,
     description = EXCLUDED.description,

@@ -1,14 +1,19 @@
 # backend/app/routers/user_router.py
-# Version: 1.3 (Added use_pin_for_all_actions to UserProfileResponse)
+# Version: 1.4 (Updated active message counting logic to include repeat_number)
+# Changelog:
+# - Refactored active message query in /me endpoint to correctly account for repeating Follow-up Messages.
 
 import logging
 import uuid
-from typing import Optional, List, Dict # Đã có List, Dict
+from typing import Optional, List, Dict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from ..db.database import get_db_session
 from ..db.models import (
@@ -16,14 +21,11 @@ from ..db.models import (
     UserConfiguration,
     SystemSetting,
     Message,
+    FmSchedule,  # THÊM IMPORT
     MessageOverallStatusEnum,
     UserAccountStatusEnum,
     UserMembershipTypeEnum
 )
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
-
 from ..core.security import get_current_active_user
 
 logger = logging.getLogger(__name__)
@@ -32,23 +34,24 @@ router = APIRouter(
     dependencies=[Depends(get_current_active_user)]
 )
 
+
 class UserProfileResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
     user_name: Optional[str] = None
     provider: Optional[str] = None
     is_confirmed_by_email: bool
+    is_admin: bool # THÊM is_admin
     account_status: UserAccountStatusEnum
     membership_type: UserMembershipTypeEnum
     timezone: Optional[str] = None
     language: Optional[str] = None
-    
     next_clc_prompt_at: Optional[datetime] = None
     wct_active_ends_at: Optional[datetime] = None
     uploaded_storage_bytes: int
     messages_remaining: Optional[int] = None
     storage_limit_gb: Optional[int] = None
-    use_pin_for_all_actions: bool # <<< THÊM TRƯỜNG MỚI
+    use_pin_for_all_actions: bool
 
     class Config:
         from_attributes = True
@@ -61,6 +64,7 @@ async def get_system_settings(db_session: AsyncSession, keys: List[str]) -> Dict
     settings_map = {s.setting_key: s.setting_value for s in settings_db}
     return {key: settings_map.get(key) for key in keys}
 
+
 @router.get("/me", response_model=UserProfileResponse, summary="Get current user profile")
 async def read_users_me(
     current_user: User = Depends(get_current_active_user),
@@ -68,8 +72,8 @@ async def read_users_me(
 ):
     logger.info(f"Fetching profile for user: {current_user.email}")
 
-    user_config: Optional[UserConfiguration] = current_user.configuration # Đã được eager load
-        
+    user_config: Optional[UserConfiguration] = current_user.configuration
+
     next_clc = user_config.next_clc_prompt_at if user_config else None
     wct_ends = user_config.wct_active_ends_at if user_config else None
 
@@ -87,10 +91,10 @@ async def read_users_me(
         if current_user.membership_type == UserMembershipTypeEnum.premium:
             max_messages_allowed = int(settings.get("max_total_messages_premium", "1000"))
             storage_limit_gb_for_user = int(settings.get("max_total_upload_storage_gb_premium", "1"))
-        else: # Free user
+        else:
             max_messages_allowed = int(settings.get("max_total_messages_free", "10"))
-            storage_limit_gb_for_user = 0 
-    except ValueError:
+            storage_limit_gb_for_user = 0
+    except (ValueError, TypeError):
         logger.error(f"Could not parse system settings for limits for user {current_user.email}. Using hardcoded defaults.")
         if current_user.membership_type == UserMembershipTypeEnum.premium:
             max_messages_allowed = 1000
@@ -98,13 +102,25 @@ async def read_users_me(
         else:
             max_messages_allowed = 10
             storage_limit_gb_for_user = 0
-
-    active_message_statuses = [MessageOverallStatusEnum.pending, MessageOverallStatusEnum.processing]
+            
+    # --- LOGIC ĐẾM TIN NHẮN "ACTIVE" ĐÃ ĐƯỢC CẬP NHẬT ---
+    # Một tin nhắn được tính là active nếu:
+    # 1. Trạng thái của nó là 'pending' hoặc 'processing'
+    # 2. HOẶC nó là một Follow-up Message có lịch lặp lại vẫn còn (repeat_number > 0)
+    
     active_messages_stmt = (
         select(func.count(Message.id))
-        .where(Message.user_id == current_user.id)
-        .where(Message.overall_send_status.in_(active_message_statuses))
+        .outerjoin(FmSchedule, Message.id == FmSchedule.message_id) # OUTERJOIN để bao gồm cả IM (không có lịch FM)
+        .where(
+            Message.user_id == current_user.id,
+            or_(
+                Message.overall_send_status.in_([MessageOverallStatusEnum.pending, MessageOverallStatusEnum.processing]),
+                FmSchedule.repeat_number > 0
+            )
+        )
     )
+    # --------------------------------------------------------
+
     active_messages_count_result = await db_session.execute(active_messages_stmt)
     active_messages_count = active_messages_count_result.scalar_one_or_none() or 0
     
@@ -116,6 +132,7 @@ async def read_users_me(
         "user_name": current_user.user_name,
         "provider": current_user.provider,
         "is_confirmed_by_email": current_user.is_confirmed_by_email,
+        "is_admin": current_user.is_admin,
         "account_status": current_user.account_status,
         "membership_type": current_user.membership_type,
         "timezone": current_user.timezone,
@@ -125,7 +142,7 @@ async def read_users_me(
         "uploaded_storage_bytes": current_user.uploaded_storage_bytes,
         "messages_remaining": messages_remaining_val,
         "storage_limit_gb": storage_limit_gb_for_user,
-        "use_pin_for_all_actions": current_user.use_pin_for_all_actions # <<< LẤY GIÁ TRỊ TỪ current_user
+        "use_pin_for_all_actions": current_user.use_pin_for_all_actions
     }
     
     return UserProfileResponse(**response_data)
