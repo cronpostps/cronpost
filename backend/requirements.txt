@@ -1,7 +1,6 @@
 # backend/requirements.txt
-# Version: 1.4
+# Version: 1.5
 # Mô tả: Danh sách các thư viện Python, ưu tiên các phiên bản mới và ổn định.
-
 fastapi==0.111.0
 uvicorn[standard]==0.30.1 # Bao gồm websockets và uvloop
 python-dotenv==1.0.1
@@ -25,4 +24,7 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 
 # Timezone handling
-pytz==2024.1 # THÊM DÒNG NÀY
+pytz==2024.1
+
+# Mail sending
+fastapi-mail==1.4.1

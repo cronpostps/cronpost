@@ -1,6 +1,6 @@
 # docker-compose.yml
-# Version: 2.2
-# Mô tả: Cấu hình lại một số cảnh báo N8N, xóa comment.
+# Version: 2.3
+# Mô tả: Loại bỏ service n8n và các cấu hình liên quan.
 
 services:
   frontend_nginx:
@@ -52,37 +52,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  n8n_service:
-    image: n8nio/n8n
-    container_name: cronpost_n8n
-    ports:
-      - "5678:5678"
-    volumes:
-      - n8n_data:/home/node/.n8n
-    env_file:
-      - ./.env
-    environment:
-      - GENERIC_TIMEZONE=UTC
-      - N8N_SECURE_COOKIE=false
-      - WEBHOOK_URL=https://n8n.cronpost.com/
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=db
-      - DB_POSTGRESDB_PORT=5432
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-      - N8N_HOST=n8n.cronpost.com
-      - N8N_SECURE_COOKIE=true
-      - N8N_TRUST_PROXY=true
-      - N8N_RUNNERS_ENABLED=true
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
-    networks:
-      - cronpost_network
-    depends_on:
-      db:
-        condition: service_healthy
-
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cronpost_cloudflared_main
@@ -101,4 +70,3 @@ networks:
 
 volumes:
   db_data:
-  n8n_data:

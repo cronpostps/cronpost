@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { width: 90%; max-width: 600px; margin: 20px auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .footer { font-size: 0.8em; color: #777; }
+        .code { background-color: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>Welcome to CronPost, {{user_name}}!</h3>
+        <p>Your account has been successfully created using your Google account.</p>
+        <p>For your records, a password has been generated for your account in case you ever need to sign in with your email and password directly. We recommend changing it after your first login.</p>
+        <p>Generated Password: <strong class="code">{{random_password}}</strong></p>
+        <p>You can now log in using the "Continue with Google" button or with your email and this password.</p>
+        <hr>
+        <p class="footer">The CronPost Team</p>
+    </div>
+</body>
+</html>

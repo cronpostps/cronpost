@@ -8,7 +8,4 @@ credentials-file: /home/nonroot/.cloudflared/36f1645d-498e-4f3a-a9ab-5b62178bf05
 ingress:
   - hostname: cronpost.com
     service: http://frontend_nginx:80
-  - hostname: n8n.cronpost.com
-    service: http://n8n_service:5678
-  # Rule cuối cùng để bắt các request không hợp lệ
   - service: http_status:404

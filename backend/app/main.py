@@ -113,7 +113,7 @@ app.include_router(password_reset_router.router, prefix="/auth")
 app.include_router(user_router.router, prefix="/users")
 app.include_router(message_router.router, prefix="/messages")
 app.include_router(user_actions_router.router, prefix="/users")
-app.include_router(admin_router.router, prefix="/")
+app.include_router(admin_router.router, prefix="/admin")
 logger.info("Auth, signin, password_reset, user, message, messaging, and user_actions routers included.")
 
 # --- Root Endpoints ---
