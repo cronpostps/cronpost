@@ -316,5 +316,5 @@ async def google_oauth_callback(
     
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "provider": "google"})
     
-    response = RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status={status_param}&email={user.email}")
+    response = RedirectResponse(url=f"{FRONTEND_BASE_URL}/dashboard.html?status={status_param}&email={user.email}")
     return response
