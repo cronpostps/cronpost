@@ -1,0 +1,249 @@
+<!-- /frontend/user-profile.html -->
+<!-- version 1.2 (Final Review) -->
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <title>User Profile & Settings - CronPost</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark main-application-page">
+    <main id="main-content" class="container mt-4">
+        <!--#include virtual="/_header-dashboard.html" -->
+        <div class="profile-header mb-4">
+            <h2>User Profile & Settings</h2>
+            <p>Manage your account details and preferences.</p>
+        </div>
+
+        <!-- General status message for all forms -->
+        <div id="formStatusMessage" class="alert mt-3" style="display: none;"></div>
+
+        <div class="row">
+            <!-- Left Column: Main settings forms -->
+            <div class="col-lg-8">
+                <!-- Profile Information Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Profile Information
+                    </div>
+                    <div class="card-body">
+                        <form id="profileForm">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email Address</label>
+                                <input type="email" class="form-control" id="email" readonly disabled>
+                                <div class="form-text">Your email address cannot be changed.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="userName" class="form-label">User Name</label>
+                                <input type="text" class="form-control" id="userName" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="timezone" class="form-label">Timezone</label>
+                                <select class="form-select" id="timezone" required>
+                                    <!-- Timezones will be populated by JavaScript -->
+                                </select>
+                            </div>
+                             <div class="mb-3">
+                                <label for="trustVerifierEmail" class="form-label">Trust Verifier Email</label>
+                                <input type="email" class="form-control" id="trustVerifierEmail">
+                                <div class="form-text">An email for critical notifications, like FNS activation.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Save Profile</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Security Settings Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Security Settings
+                    </div>
+                    <div class="card-body">
+                        <!-- Password Change -->
+                        <div class="mb-4">
+                            <h5>Change Password</h5>
+                            <form id="passwordChangeForm">
+                                <div class="mb-3">
+                                    <label for="currentPassword" class="form-label">Current Password</label>
+                                    <input type="password" class="form-control" id="currentPassword" autocomplete="off">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="newPassword" class="form-label">New Password</label>
+                                    <input type="password" class="form-control" id="newPassword" minlength="6" maxlength="20" autocomplete="new-password">
+                                     <div class="form-text">6-20 characters.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirmNewPassword" class="form-label">Confirm New Password</label>
+                                    <input type="password" class="form-control" id="confirmNewPassword" autocomplete="new-password">
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="showPasswordToggle">
+                                    <label class="form-check-label" for="showPasswordToggle">
+                                        Show Passwords
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-secondary">Update Password</button>
+                                <div id="passwordChangeStatus" class="form-text mt-2"></div>
+                            </form>
+                        </div>
+                        <hr>
+                        <!-- PIN Change -->
+                        <div class="mb-4">
+                             <h5>PIN Code (4 digits)</h5>
+                             <form id="pinChangeForm">
+                                 <div class="mb-3">
+                                    <label for="currentPin" class="form-label">Current PIN</label>
+                                    <input type="password" class="form-control" id="currentPin" maxlength="4" pattern="\d{4}" autocomplete="off">
+                                     <div class="form-text">Leave empty if setting for the first time.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="newPin" class="form-label">New PIN</label>
+                                    <input type="password" class="form-control" id="newPin" required maxlength="4" pattern="\d{4}" autocomplete="new-password">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirmNewPin" class="form-label">Confirm New PIN</label>
+                                    <input type="password" class="form-control" id="confirmNewPin" required maxlength="4" pattern="\d{4}" autocomplete="new-password">
+                                </div>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="showPinToggle">
+                                    <label class="form-check-label" for="showPinToggle">
+                                        Show PINs
+                                    </label>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="pinQuestion" class="form-label">PIN Reminder Question (Optional)</label>
+                                    <input type="text" class="form-control" id="pinQuestion">
+                                </div>
+                                 <button type="submit" class="btn btn-secondary">Set/Update PIN</button>
+                                 <div id="pinChangeStatus" class="form-text mt-2"></div>
+                             </form>
+                             <div class="mt-3">
+                                 <p>Forgot your PIN? <a href="#" id="recoverPinLink">Use Recovery Code</a></p>
+                             </div>
+                        </div>
+                        <hr>
+                        <!-- Security Toggles -->
+                        <div>
+                             <h5>Security Options</h5>
+                             <form id="securityOptionsForm">
+                                 <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="usePinForAllActions">
+                                    <label class="form-check-label" for="usePinForAllActions">Require PIN for all critical actions (including Check-in)</label>
+                                 </div>
+                                 <div class="form-check form-switch">
+                                     <input class="form-check-input" type="checkbox" role="switch" id="checkinOnSignin">
+                                     <label class="form-check-label" for="checkinOnSignin">Automatically check-in upon sign-in during WCT</label>
+                                 </div>
+                                 <button type="submit" class="btn btn-secondary mt-3">Save Options</button>
+                             </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rate & Review Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Rate & Review CronPost
+                    </div>
+                    <div class="card-body">
+                        <form id="reviewForm">
+                            <div class="mb-3">
+                                <label class="form-label">Your Rating</label>
+                                <div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="rating" id="rating_1" value="1">
+                                        <label class="form-check-label" for="rating_1">1</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="rating" id="rating_2" value="2">
+                                        <label class="form-check-label" for="rating_2">2</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="rating" id="rating_3" value="3">
+                                        <label class="form-check-label" for="rating_3">3</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="rating" id="rating_4" value="4">
+                                        <label class="form-check-label" for="rating_4">4</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="rating" id="rating_5" value="5">
+                                        <label class="form-check-label" for="rating_5">5</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="reviewComment" class="form-label">Your Comments (Optional)</label>
+                                <textarea class="form-control" id="reviewComment" rows="3" maxlength="300"></textarea>
+                                <div class="form-text">Max 300 characters.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit Review</button>
+                            <div id="reviewSubmitStatus" class="form-text mt-2"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Usage and History -->
+            <div class="col-lg-4">
+                <!-- Subscription & Usage Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Subscription & Usage
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Membership: <span id="membershipType" class="badge bg-primary rounded-pill">Loading...</span>
+                        </li>
+                        <li class="list-group-item">
+                           <a href="/pricing.html" id="upgradeButton" class="btn btn-success w-100" style="display: none;">Upgrade to Premium</a>
+                           <span id="premiumUserText" style="display: none;">You are a Premium user.</span>
+                        </li>
+                        <li class="list-group-item">Messages Remaining: <strong id="messagesRemaining">N/A</strong></li>
+                        <li class="list-group-item">
+                            <div>Storage Usage</div>
+                            <div class="progress mt-1" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                               <div id="storageUsageBar" class="progress-bar" style="width: 0%"></div>
+                            </div>
+                            <small id="storageUsageText" class="form-text">0 MB / 0 GB</small>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Access History Card -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Recent Access History
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>IP Address</th>
+                                    <th>Device</th>
+                                </tr>
+                            </thead>
+                            <tbody id="accessHistoryTableBody">
+                                <!-- History will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+<!--#include virtual="/_footer.html" -->
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/user-profile.js"></script>
+</body>
+</html>

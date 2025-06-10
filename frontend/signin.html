@@ -1,0 +1,86 @@
+<!-- /frontend/signin.html -->
+<!-- version 1.0-->
+ 
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <title>Sign In - CronPost</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark auth-page">
+    <header id="main-header" class="site-header container">
+        <div class="header-wrapper">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <div class="site-branding">
+                        <a href="/"><h1>CronPost</h1></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" class="container">
+        <section class="auth-form-section">
+            <div class="row justify-content-center">
+                <div class="col-md-6 col-lg-5">
+                    <div class="auth-form-container">
+                        <h2 class="text-center mb-4">Sign In to Your Account</h2>
+
+                        <div id="generalFormError" class="alert" style="display: none;"></div>
+
+                        <form id="signInForm">
+                            <div class="form-group mb-3">
+                                <label for="email" class="form-label">Email address</label>
+                                <input type="email" class="form-control" id="email" name="email" required autocomplete="email">
+                                <div class="invalid-feedback" id="emailError"></div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" name="password" required autocomplete="current-password">
+                                <div class="invalid-feedback" id="passwordError"></div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" value="" id="showPasswordCheck">
+                                    <label class="form-check-label" for="showPasswordCheck">Show Password</label>
+                                </div>
+                            </div>
+
+                            <div class="cf-turnstile" data-sitekey="0x4AAAAAABe3a2VhaF8Z9WQW" id="signinTurnstile"></div>
+                            
+                            <button type="submit" class="btn btn-primary w-100 mt-3">Sign In</button>
+                        </form>
+                        <div id="resendConfirmationSection" style="display: none;" class="mt-3 text-center border-top pt-3">
+                            <p class="mb-2">Tài khoản của bạn có thể chưa được kích hoạt hoặc có lỗi xảy ra.</p>
+                            <input type="hidden" id="resendEmailInput"> 
+                            <button type="button" id="resendConfirmationBtn" class="btn btn-link p-0">Gửi lại email xác nhận</button>
+                            <div id="resendConfirmationMessage" class="form-text mt-1"></div>
+                        </div>
+
+                        <div class="or-separator my-4">
+                            <span>OR</span>
+                        </div>
+                        <button type="button" id="googleSignInBtn" class="btn btn-custom-google w-100">
+                            <img src="img/gg_light_sq_ctn.svg" id="googleSignInImg" alt="Sign In with Google">
+                        </button>
+                        <div class="mt-4 text-center">
+                            <p>Don't have an account? <a href="/signup.html">Sign Up</a></p>
+                            <p><a href="/forgot-password.html">Forgot Password?</a></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+<!--#include virtual="/_footer.html" -->
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/signin.js"></script>
+</body>
+</html>

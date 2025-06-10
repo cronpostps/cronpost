@@ -1,0 +1,72 @@
+# docker-compose.yml
+# Version: 2.3
+# Mô tả: Loại bỏ service n8n và các cấu hình liên quan.
+
+services:
+  frontend_nginx:
+    image: nginx:alpine
+    container_name: cronpost_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend_python
+    networks:
+      - cronpost_network
+
+  backend_python:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile_backend
+    container_name: cronpost_backend
+    volumes:
+      - ./backend/app:/code/app
+    env_file:
+      - ./.env
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - cronpost_network
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:15-alpine
+    container_name: cronpost_postgres
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./.env
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db_init:/docker-entrypoint-initdb.d
+    networks:
+      - cronpost_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cronpost_cloudflared_main
+    restart: unless-stopped
+    command: tunnel --config /home/nonroot/.cloudflared/config.yml run
+    volumes:
+      - ./.cloudflared:/home/nonroot/.cloudflared
+    networks:
+      - cronpost_network
+    depends_on:
+      - frontend_nginx
+
+networks:
+  cronpost_network:
+    driver: bridge
+
+volumes:
+  db_data:

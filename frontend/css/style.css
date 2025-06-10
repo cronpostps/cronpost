@@ -1,0 +1,683 @@
+/* frontend/css/style.css */
+/* CronPost Custom Styles - Optimized Version */
+
+/* -------------------------------------------------------------------------- */
+/* 1. Global Resets & Base Styles
+/* -------------------------------------------------------------------------- */
+body {
+    font-family: 'Courier New', Courier, monospace;
+    margin: 0;
+    padding: 0 !important; /* Override template body padding if any */
+    line-height: 1.6;
+    font-size: 16px;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Hide template's fixed border decorations */
+body > span[class*="border-"],
+body > span[class*="shape-"] {
+    display: none !important;
+}
+
+/* .container rules are removed as Bootstrap 5.3.6 already handles them.
+Ensure Bootstrap CSS is loaded BEFORE this custom CSS file.
+*/
+
+a {
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    /* Font-family is inherited from body, only override if different or specific template override needed */
+    font-family: 'Courier New', Courier, monospace; /* Keeping this to ensure override from template */
+    text-transform: none; /* Ensure no unwanted uppercase */
+    font-weight: bold;
+    margin-top: 0;
+    margin-bottom: 0.75em;
+}
+
+/* General section padding */
+.cronpost-section {
+    padding: 50px 0;
+}
+
+.section-title {
+    font-size: 2em;
+    margin-bottom: 40px;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. Theme Definitions
+/* -------------------------------------------------------------------------- */
+
+/* ----- Dark Theme (Default) ----- */
+body.theme-dark {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+body.theme-dark header.site-header .header-wrapper,
+body.theme-dark .section-divider,
+body.theme-dark footer.site-footer {
+    border-color: #333333 !important;
+}
+
+body.theme-dark a {
+    color: #ffa500;
+}
+body.theme-dark a:hover {
+    color: #ffc966;
+}
+
+body.theme-dark .site-branding h1 a {
+    color: #e0e0e0 !important;
+}
+body.theme-dark .site-branding h1 a:hover {
+    color: #ffa500 !important;
+}
+
+body.theme-dark nav.main-navigation ul.main-menu > li > a,
+body.theme-dark nav.menu-responsive ul.main-menu > li > a {
+    color: #c0c0c0;
+}
+body.theme-dark nav.main-navigation ul.main-menu > li > a:hover,
+body.theme-dark nav.menu-responsive ul.main-menu > li > a:hover {
+    color: #ffa500;
+}
+
+body.theme-dark .cta-button-nav,
+body.theme-dark .cta-button-main {
+    color: #121212 !important;
+    background-color: #ffa500;
+    border: 1px solid #ffa500;
+    padding: 8px 15px;
+    border-radius: 3px;
+    font-weight: bold;
+    display: inline-block;
+}
+body.theme-dark .cta-button-nav:hover,
+body.theme-dark .cta-button-main:hover {
+    background-color: #dd8c00;
+    border-color: #dd8c00;
+    color: #121212 !important;
+}
+
+body.theme-dark .hero-section h1,
+body.theme-dark .hero-section h2.welcome-title {
+    color: #ffa500;
+}
+
+body.theme-dark .section-title, body.theme-dark h2 {
+    color: #e0e0e0;
+}
+
+body.theme-dark .step .step-icon {
+    color: #ffa500;
+}
+
+body.theme-dark nav#nav ul.dropdown-menu,
+body.theme-dark nav.menu-responsive ul.dropdown-menu {
+    background-color: #2a2a2a;
+    border: 1px solid #333333;
+}
+body.theme-dark nav#nav ul.dropdown-menu > li > a,
+body.theme-dark nav.menu-responsive ul.dropdown-menu > li > a {
+    color: #c0c0c0;
+}
+body.theme-dark nav#nav ul.dropdown-menu > li > a:hover,
+body.theme-dark nav.menu-responsive ul.dropdown-menu > li > a:hover {
+    background-color: #ffa500;
+    color: #121212 !important;
+}
+
+/* ----- Light Theme ----- */
+body.theme-light {
+    background-color: #f0f0f0;
+    color: #1c1c1c;
+}
+
+body.theme-light header.site-header .header-wrapper,
+body.theme-light .section-divider,
+body.theme-light footer.site-footer {
+    border-color: #cccccc !important;
+}
+
+body.theme-light a {
+    color: #d96c00;
+}
+body.theme-light a:hover {
+    color: #b85a00;
+}
+
+body.theme-light .site-branding h1 a {
+    color: #1c1c1c !important;
+}
+body.theme-light .site-branding h1 a:hover {
+    color: #d96c00 !important;
+}
+
+body.theme-light nav.main-navigation ul.main-menu > li > a,
+body.theme-light nav.menu-responsive ul.main-menu > li > a {
+    color: #333333;
+}
+body.theme-light nav.main-navigation ul.main-menu > li > a:hover,
+body.theme-light nav.menu-responsive ul.main-menu > li > a:hover {
+    color: #d96c00;
+}
+
+body.theme-light .cta-button-nav,
+body.theme-light .cta-button-main {
+    color: #f0f0f0 !important;
+    background-color: #d96c00;
+    border: 1px solid #d96c00;
+    padding: 8px 15px;
+    border-radius: 3px;
+    font-weight: bold;
+    display: inline-block;
+}
+body.theme-light .cta-button-nav:hover,
+body.theme-light .cta-button-main:hover {
+    background-color: #b85a00;
+    border-color: #b85a00;
+    color: #f0f0f0 !important;
+}
+
+body.theme-light .hero-section h1,
+body.theme-light .hero-section h2.welcome-title {
+    color: #d96c00;
+}
+
+body.theme-light .section-title, body.theme-light h2 {
+    color: #1c1c1c;
+}
+
+body.theme-light .step .step-icon {
+    color: #d96c00;
+}
+
+body.theme-light nav#nav ul.dropdown-menu,
+body.theme-light nav.menu-responsive ul.dropdown-menu {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+}
+body.theme-light nav#nav ul.dropdown-menu > li > a,
+body.theme-light nav.menu-responsive ul.dropdown-menu > li > a {
+    color: #333333;
+}
+body.theme-light nav#nav ul.dropdown-menu > li > a:hover,
+body.theme-light nav.menu-responsive ul.dropdown-menu > li > a:hover {
+    background-color: #d96c00;
+    color: #f0f0f0 !important;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* 3. Header Styles - Tinh chỉnh lại theo cấu trúc Bootstrap
+/* -------------------------------------------------------------------------- */
+
+/* Override template style for .site-header */
+header.site-header { /* class="site-header container" in your HTML */
+    margin-bottom: 0 !important;
+    padding-top: 0 !important; /* Let .header-wrapper control top padding */
+    padding-bottom: 0 !important; /* Let .header-wrapper control bottom padding and border */
+    animation: none !important;
+    border: none !important; /* Remove .site-header border, .header-wrapper will have border */
+    /* Bootstrap's .container handles width and centering */
+}
+
+header.site-header .header-wrapper {
+    padding: 15px 0; /* Top/bottom padding for actual header content */
+    border-bottom-width: 1px !important;
+    border-bottom-style: solid !important;
+    width: 100%; /* header-wrapper takes 100% width of its parent (.container) */
+    /* border-color handled by theme */
+    box-sizing: border-box;
+}
+
+/* .row inside .header-wrapper (and within the header's .container) */
+/* Bootstrap already styles .row and .col-md-*, only fine-tune if necessary */
+header.site-header .row {
+    display: flex;
+    align-items: center; /* Vertically align columns */
+    /* margin-left: 0; */ /* Let Bootstrap's .row handle negative margins if needed */
+    /* margin-right: 0; */
+}
+
+/* Left logo block */
+header.site-header .col-md-4 { /* .col-md-4 class from your HTML */
+    display: flex;
+    align-items: center;
+}
+
+/* Right navigation block */
+header.site-header .col-md-8 { /* .col-md-8 class from your HTML */
+    display: flex;
+    justify-content: flex-end; /* Push menu to the right */
+    align-items: center;
+}
+
+.logo-area {
+    display: flex;
+    align-items: center;
+}
+.logo-area h1 { /* Target h1 directly within template's .site-branding */
+    font-family: 'Courier New', Courier, monospace !important; /* Override font from templatemo_style.css */
+    font-size: 1.8em !important; /* Adjust size if needed */
+    font-weight: bold !important;
+    text-transform: none !important; /* Remove uppercase if present */
+    margin: 0; /* Reset H1 margin */
+    /* Link color in h1 handled by theme */
+}
+.logo-area img {
+    height: 30px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+/* Navigation Menu */
+nav#nav {
+/* No need to set width 100% here as .col-md-8 handles that */
+}
+
+nav.main-navigation ul.main-menu {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    align-items: center;
+}
+nav.main-navigation ul.main-menu > li {
+    margin-left: 15px;
+}
+nav.main-navigation ul.main-menu > li:first-child {
+    margin-left: 0;
+}
+nav.main-navigation ul.main-menu > li > a {
+    padding: 10px 12px;
+    font-size: 0.9em; /* Slightly reduce menu font size */
+    text-transform: uppercase; /* Keep from template if desired */
+    font-family: 'Courier New', Courier, monospace !important; /* Override font from templatemo_style.css */
+    font-weight: normal !important; /* Override font-weight if templatemo_style.css sets it */
+}
+
+/* Dropdown Language Menu Item Styling */
+nav#nav ul.main-menu li.dropdown ul.dropdown-menu,
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu {
+    min-width: auto;
+    padding: 5px 0;
+    margin: 2px 0 0;
+    font-size: 13px; /* Slightly reduced font size for dropdown items */
+    text-align: left;
+    list-style: none;
+    background-clip: padding-box;
+    border-radius: 3px; /* Slight border-radius */
+    box-shadow: 0 3px 8px rgba(0,0,0,.15); /* Lighter shadow */
+    position: absolute;
+    display: none;
+    /* Removed float: left; - it's redundant with position: absolute; */
+}
+nav#nav ul.main-menu li.dropdown.open ul.dropdown-menu,
+nav.menu-responsive ul.main-menu li.dropdown.open ul.dropdown-menu {
+    display: block;
+}
+nav#nav ul.main-menu li.dropdown ul.dropdown-menu > li,
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu > li {
+    display: block !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    float: none !important;
+}
+nav#nav ul.main-menu li.dropdown ul.dropdown-menu > li > a,
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu > li > a {
+    display: block !important;
+    padding: 6px 15px !important; /* Adjusted padding */
+    /* Removed clear: both !important; - it's redundant with display: block; */
+    font-weight: normal !important;
+    line-height: 1.5 !important; /* Adjusted line-height */
+    white-space: nowrap !important;
+    text-transform: none !important;
+    font-family: 'Courier New', Courier, monospace !important; /* Synchronized font */
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. Hero Section Styles
+/* -------------------------------------------------------------------------- */
+.hero-section { /* Using generic .cronpost-section class */
+    padding: 60px 0;
+    text-align: center;
+    /* border-bottom handled by .section-divider if used */
+}
+.hero-section#menu-1 { /* Override template's menu-1 ID if still used */
+    animation: none !important;
+}
+.hero-section .welcome-title {
+    font-size: 2.5em;
+    margin-bottom: 25px;
+    font-weight: bold;
+    animation: none !important;
+}
+.hero-section .subtitle {
+    font-size: 1.1em;
+    line-height: 1.7;
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 35px;
+    opacity: 0.9;
+    animation: none !important;
+}
+/* Remove unnecessary template elements in hero */
+.home-section#menu-1 .home-intro {
+    margin-bottom: 0;
+}
+.home-section#menu-1 .list-icons,
+.home-section#menu-1 .home-projects {
+    display: none !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. How It Works, User Stories, Final CTA Section Styles
+/* -------------------------------------------------------------------------- */
+.how-it-works-section, /* Ensure HTML uses these classes */
+.user-stories-section,
+.final-cta-section {
+    padding: 50px 0;
+    text-align: center;
+}
+
+.steps-container,
+.stories-container {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+.step {
+    flex-basis: calc(25% - 22px); /* 22px = gap + 2*border */
+    min-width: 180px;
+    padding: 2px;
+    border: 1px solid;
+    border-radius: 1px;
+    /* Add properties to center content inside .step */
+    display: flex;             /* Enable Flexbox for .step */
+    flex-direction: column;    /* Arrange child elements vertically */
+    align-items: center;       /* Center child elements horizontally */
+    /* justify-content: center; */ /* Center child elements vertically (if .step has fixed height or content doesn't fill) */
+    text-align: center;        /* Ensure text inside child elements is also centered */
+    /* Border color will follow theme */
+}
+body.theme-dark .step { border-color: #333; }
+body.theme-light .step { border-color: #ccc; }
+.step .step-icon-wrapper { /* Create a wrapper for the icon to control height */
+    min-height: 50px; /* Set a minimum height for the icon area, adjust if needed */
+    display: flex;
+    align-items: center; /* Vertically center icon within wrapper */
+    justify-content: center; /* Horizontally center icon within wrapper */
+    width: 100%; /* Take full width of .step */
+}
+.step .step-icon {
+    font-size: 2.2em;
+    /* margin-bottom: 15px; Remove margin-bottom here, .step-icon-wrapper will create spacing */
+    font-weight: bold;
+}
+.step h3 {
+    font-size: 1.15em;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+.step p {
+    font-size: 0.9em;
+    line-height: 1.5;
+    opacity: 0.85;
+    flex-grow: 1; /* Allow the p tag to expand so text blocks can try to match height */
+}
+
+.story {
+    flex-basis: calc(33.333% - 22px);
+    min-width: 250px;
+    padding: 20px;
+    border: 1px dashed;
+    border-radius: 3px;
+    /*font-style: italic; Keep font-style italic if needed */
+    opacity: 0.9;
+}
+body.theme-dark .story { border-color: #444; }
+body.theme-light .story { border-color: #bbb; }
+
+.story h4 {
+    font-size: 1.1em;
+    font-style: normal;
+    margin-bottom: 10px;
+}
+
+.final-cta-section h2 {
+    font-size: 1.8em;
+    margin-bottom: 15px;
+}
+.final-cta-section p {
+    margin-bottom: 30px;
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 7. Footer Styles - Updated as per new requirements
+/* -------------------------------------------------------------------------- */
+footer.site-footer {
+    padding: 25px 0 !important;
+    font-size: 0.9em;
+    border-top-width: 1px !important;
+    border-top-style: solid !important;
+    /* border-color handled by theme */
+}
+
+/* Hide original template footer elements */
+footer.site-footer .main-footer,
+footer.site-footer .social { /* .social is from template */
+    display: none !important;
+}
+
+/* Adjust footer .container for horizontal alignment of child blocks */
+footer.site-footer .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Allow wrapping on mobile */
+    gap: 15px; /* Spacing between main blocks */
+}
+
+.footer-copyright {
+    text-align: left; /* Align copyright to the left */
+    flex-basis: 100%; /* Default for mobile */
+    order: 1; /* Always at the top on mobile */
+}
+.footer-copyright p {
+    margin-bottom: 0;
+    opacity: 0.8;
+}
+
+.cronpost-footer-nav {
+    text-align: center; /* Center align links */
+    flex-basis: 100%; /* Default for mobile */
+    order: 2; /* In the middle on mobile */
+}
+.cronpost-footer-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: inline-flex; /* To make list items horizontal and ul collapse */
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.cronpost-footer-nav ul li {
+    margin: 0 8px 5px;
+}
+
+.footer-theme-selector {
+    display: flex;
+    justify-content: center; /* Center align on mobile */
+    flex-basis: 100%; /* Default for mobile */
+    order: 3; /* Last on mobile */
+}
+/* Theme selector label hidden as per request */
+/* .footer-theme-selector label { display: none; } */
+
+#theme-dropdown {
+    background-color: inherit;
+    color: inherit;
+    border: 1px solid;
+    padding: 5px 8px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 8. Responsive
+/* -------------------------------------------------------------------------- */
+a.toggle-nav {
+    color: inherit !important;
+    background: transparent !important;
+    width: auto;
+    height: auto;
+    line-height: normal;
+    padding: 10px;
+    margin: 10px 0 !important;
+    top: 5px !important;
+    right: 15px !important;
+}
+a.toggle-nav i.fa-bars {
+    font-size: 1.8em;
+}
+
+nav.menu-responsive {
+    background-color: transparent !important;
+    padding: 0 !important;
+}
+nav.menu-responsive ul.main-menu {
+    flex-direction: column;
+    width: 100%;
+}
+body.theme-dark nav.menu-responsive ul.main-menu { background-color: rgba(26,26,26,0.95); }
+body.theme-light nav.menu-responsive ul.main-menu { background-color: rgba(248,249,250,0.98); }
+
+nav.menu-responsive ul.main-menu > li {
+    margin-left: 0;
+    width: 100%;
+    text-align: left;
+    border-bottom: 1px solid;
+}
+body.theme-dark nav.menu-responsive ul.main-menu > li { border-color: #333; }
+body.theme-light nav.menu-responsive ul.main-menu > li { border-color: #ddd; }
+
+nav.menu-responsive ul.main-menu > li:last-child {
+    border-bottom: none;
+}
+nav.menu-responsive ul.main-menu > li > a {
+    padding: 12px 20px;
+    display: block;
+}
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu {
+    position: static !important;
+    float: none !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border-top: 1px solid !important;
+    margin-top: 0 !important;
+    border-radius: 0 !important;
+}
+body.theme-dark nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu { border-top-color: #444 !important;}
+body.theme-light nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu { border-top-color: #ddd !important;}
+
+nav.menu-responsive ul.main-menu li.dropdown ul.dropdown-menu > li > a {
+    padding-left: 30px !important;
+}
+
+/* Responsive for content sections and Footer */
+@media (max-width: 767px) { /* Mobile */
+    .step, .story {
+        flex-basis: calc(100% - 20px);
+        margin-bottom: 20px;
+    }
+    .hero-section h1 { font-size: 1.8em; } /* Reduce font size on mobile */
+    .hero-section .subtitle { font-size: 0.9em; }
+    .section-title { font-size: 1.6em; }
+
+    /* Footer on mobile already handled as column by default */
+    .cronpost-footer-nav ul { margin: 10px 0; }
+    .cronpost-footer-nav ul li { margin: 5px 7px; }
+}
+
+@media (min-width: 768px) { /* Desktop and Tablet */
+    footer.site-footer .container {
+        flex-direction: row; /* Arrange horizontally */
+        justify-content: space-between;
+    }
+    .footer-copyright {
+        flex-basis: auto; /* Shrink to content */
+        text-align: left;
+        order: 1;
+    }
+    .cronpost-footer-nav {
+        flex-basis: auto;
+        order: 2;
+    }
+    .footer-theme-selector {
+        flex-basis: auto;
+        justify-content: flex-end; /* Push select to the right */
+        order: 3;
+    }
+}
+
+/* Common class for section dividers if needed */
+.section-divider {
+    border-bottom-width: 1px;
+    border-bottom-style: solid;
+    padding-bottom: 40px;
+    margin-bottom: 0;
+    /* border-color handled by theme */
+    /* width: 100%; /* Ensure this line is full width if its parent section is full width */
+}
+/* The parent section of .section-divider should have width:100% and not be wrapped by .container if you want a full-width line */
+/* If the parent section has .container, then .section-divider will only draw within the .container */
+
+main section:last-of-type.section-divider {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.btn-custom-google {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 0;
+    outline: none !important;
+    box-shadow: none !important;
+    display: inline-block;
+    line-height: 0; /* Helps remove extra space if img is inline */
+    transition: transform 0.1s ease-out; /* Add transition for smooth effect */
+}
+
+.btn-custom-google:hover {
+    /* transform: scale(1.02); */ /* Slightly enlarge on hover - might affect layout */
+    opacity: 0.9; /* Slightly reduce opacity on hover - a gentle approach */
+}
+
+.btn-custom-google:active {
+    transform: scale(0.98); /* Slightly shrink on click (creates press effect) */
+    opacity: 1;
+}
+
+.btn-custom-google:focus,
+.btn-custom-google:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.btn-custom-google img {
+    display: block;
+    width: auto;
+    max-height: 40px; /* Or size according to Google guidelines */
+}

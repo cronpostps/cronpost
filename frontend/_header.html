@@ -1,0 +1,51 @@
+<!-- /frontend/_header.html -->
+<!-- version 1.0-->
+
+<header id="main-header" class="site-header container">
+    <div class="header-wrapper">
+        <div class="row align-items-center">
+            <div class="col-lg-4 col-md-4 col-8">
+                <div class="site-branding">
+                    <a href="/"><h1>CronPost</h1></a>
+                </div>
+            </div>
+            <div class="col-4 d-lg-none text-end">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenuGlobal" aria-controls="mobileMenuGlobal" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="fa fa-bars"></span>
+                </button>
+            </div>
+            <div class="col-lg-8 col-md-8 d-none d-lg-block">
+                <nav id="nav" class="main-navigation">
+                    <ul class="main-menu d-flex justify-content-end">
+                        <li class="nav-item dropdown">
+                            <a href="#" id="languageDropdownDesktop" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                                <span id="currentLangDesktop">EN</span>
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="languageDropdownDesktop">
+                                <li><a class="dropdown-item" href="#" onclick="changeLanguage('en', 'EN'); return false;">EN</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="changeLanguage('vi', 'VI'); return false;">VI</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item"><a href="/signin.html" class="nav-link cta-button-nav">Sign In</a></li> <li class="nav-item"><a href="/signup.html" class="nav-link cta-button-nav">Sign Up</a></li> </ul>
+                </nav>
+            </div>
+        </div>
+        <div class="collapse d-lg-none" id="mobileMenuGlobal">
+            <nav class="main-navigation menu-responsive mt-3">
+                <ul class="main-menu">
+                    <li><a href="/signin.html">Sign In</a></li>
+                    <li><a href="/signup.html">Sign Up</a></li>
+                    <li class="dropdown">
+                        <a href="#" id="languageDropdownMobile" class="dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                            <span id="currentLangMobile">EN</span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="languageDropdownMobile">
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('en', 'EN'); return false;">EN</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="changeLanguage('vi', 'VI'); return false;">VI</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</header>

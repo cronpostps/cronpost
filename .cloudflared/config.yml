@@ -1,0 +1,11 @@
+# /.cloudflared/config.yml
+# version 1.0
+
+# QUAN TRỌNG: Thay tunnel ID và tên file .json bằng thông tin thật của bạn
+tunnel: 36f1645d-498e-4f3a-a9ab-5b62178bf05a
+credentials-file: /home/nonroot/.cloudflared/36f1645d-498e-4f3a-a9ab-5b62178bf05a.json
+
+ingress:
+  - hostname: cronpost.com
+    service: http://frontend_nginx:80
+  - service: http_status:404

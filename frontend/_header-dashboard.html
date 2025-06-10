@@ -1,0 +1,50 @@
+<!-- /frontend/_header-dashboard.html -->
+<!-- version 1.2 -->
+
+<header id="main-header" class="site-header container">
+    <div class="header-wrapper d-flex justify-content-between align-items-center">
+        <div class="site-branding">
+            <a href="/dashboard.html"><h1>CronPost</h1></a>
+        </div>
+        <nav class="site-navigation d-flex align-items-center">
+            <div class="col-4 d-lg-none text-end">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenuGlobal" aria-controls="mobileMenuGlobal" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="fa fa-bars"></span>
+                </button>
+            </div>
+            <div class="col-lg-8 col-md-8 d-none d-lg-block">
+                <nav id="nav" class="main-navigation">
+                    <ul class="main-menu d-flex justify-content-end">
+                        <li class="nav-item dropdown">
+                            <a href="#" id="languageDropdownDesktop" class="nav-link dropdown-toggle" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                                <span id="currentLangDesktop">EN</span>
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="languageDropdownDesktop">
+                                <li><a class="dropdown-item" href="#" onclick="changeLanguage('en', 'EN'); return false;">EN</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="changeLanguage('vi', 'VI'); return false;">VI</a></li>
+                            </ul>
+                        </li>
+                         <div class="dropdown user-dropdown">
+                <a href="#" class="dropdown-toggle" id="userDropdownMenuLink" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span id="headerUserIdentifier">Loading...</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdownMenuLink">
+                    <li><a class="dropdown-item" href="/dashboard.html">Dashboard</a></li>
+                    <li><a class="dropdown-item" href="/cron-message.html">Messages</a></li>
+                    <li><a class="dropdown-item" href="/simple-cron-email-message.html">Simple Message</a></li>
+                    <li>
+                        <a class="dropdown-item d-flex justify-content-between align-items-center" href="/in-app-messaging.html">
+                            In-App Messages
+                            <span id="inAppUnreadCount" class="badge rounded-pill ms-2"></span>
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="/user-profile.html">Profile & Settings</a></li>
+                    <li><a class="dropdown-item" href="/sending-history.html">Sending History</a></li>
+                    <li><a class="dropdown-item" href="/help-tips.html">Help & Tips</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" id="logoutButton">Logout</a></li>
+                </ul>
+            </div>
+        </nav>
+</header>

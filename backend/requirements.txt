@@ -1,0 +1,30 @@
+# backend/requirements.txt
+# Version: 1.6
+# Mô tả: Loại bỏ fastapi-mail.
+
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-dotenv==1.0.1
+httpx==0.27.0
+
+# Database: SQLAlchemy ORM và driver ASYNC cho PostgreSQL
+sqlalchemy==2.0.30
+asyncpg==0.29.0
+
+# Bảo mật: Băm mật khẩu và JWT
+bcrypt==4.1.3
+python-jose[cryptography]==3.4.0
+authlib==1.3.0
+
+# Xác thực token (itsdangerous) và Rate Limiting
+itsdangerous==2.2.0
+slowapi==0.1.9
+
+# Pydantic
+pydantic==2.7.4 
+pydantic-settings==2.3.4
+
+# Timezone handling
+pytz==2024.1
+
+user-agents==2.2.0

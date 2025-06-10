@@ -1,0 +1,34 @@
+# /backend/Dockerfile_backend
+# Version: 1.2 (Cleaned)
+
+# Sử dụng base image Python 3.9 phiên bản slim, ổn định và nhỏ gọn.
+FROM python:3.9-slim
+
+# Đặt thư mục làm việc trong container
+WORKDIR /code
+
+# Cài đặt múi giờ UTC để nhất quán
+ENV TZ=Etc/UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Tắt buffer của Python để log hiển thị ngay lập tức
+ENV PYTHONUNBUFFERED 1
+
+# Nâng cấp pip
+RUN pip install --no-cache-dir --upgrade pip
+
+# Sao chép và cài đặt các thư viện
+COPY ./requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Sao chép mã nguồn ứng dụng
+# Lưu ý: Volume mount trong docker-compose sẽ ghi đè lên đây trong môi trường dev,
+# nhưng bước này cần thiết để build image độc lập.
+COPY ./app ./app
+
+# Mở cổng 8000 bên trong container
+EXPOSE 8000
+
+# Lệnh để chạy ứng dụng khi container khởi động
+# Dùng --reload cho môi trường phát triển
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

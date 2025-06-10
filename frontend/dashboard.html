@@ -1,0 +1,89 @@
+<!-- /frontend/dashboard.html -->
+<!-- version 1.2-->
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <title>Dashboard - CronPost</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark main-application-page">
+    <main id="main-content" class="container mt-4">
+        <!--#include virtual="/_header-dashboard.html" -->
+        <div class="dashboard-header mb-4">
+            <h2 id="welcomeMessage">Welcome!</h2>
+            <p>Current Account Status: <strong id="accountStatus">Loading...</strong></p>
+            <p>Current Time: <strong id="userCurrentTime">--:--:--</strong></p>
+        </div>
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card countdown-card mb-4">
+                    <div class="card-header">
+                        Next Action Countdown
+                    </div>
+                    <div class="card-body text-center">
+                        <h3 id="countdownTimer" class="display-4">--:--:--</h3>
+                        <p id="countdownLabel">Loading schedule...</p>
+                        <button id="mainActionButton" class="btn btn-lg btn-primary mt-3" style="display: none;">Action</button>
+                    </div>
+                </div>
+
+                <div class="card message-summary-card mb-4">
+                    <div class="card-header">
+                        Message Overview
+                    </div>
+                    <div class="card-body">
+                        <p>Initial Message (IM): <span id="imStatus">N/A</span> - <a href="/cron-message.html?type=im" id="manageImLink">Manage IM</a></p>
+                        <p>Follow-up Messages (FM): Active (<span id="fmActiveCount">0</span>) / Inactive (<span id="fmInactiveCount">0</span>) - <a href="/cron-message.html?type=fm" id="manageFmLink">Manage FMs</a></p>
+                        <p>Simple Cron Messages (SCM): Active (<span id="scmActiveCount">0</span>) / Inactive (<span id="scmInactiveCount">0</span>) - <a href="/simple-cron-email-message.html" id="manageScmLink">Manage SCMs</a></p>
+                    </div>
+                </div>
+            </div>
+
+        <div class="col-md-4">
+                <div class="card account-details-card mb-4">
+                    <div class="card-header">
+                        Account Details
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item">User Name: <span id="dashUserName">N/A</span></li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Membership: <span id="dashMembershipType">N/A</span>
+                            <button id="upgradeNowBtn" class="btn btn-sm btn-success" style="display: none;">Upgrade Now</button>
+                            <button id="manageSubscriptionBtn" class="btn btn-sm btn-info" style="display: none;">Manage Subscription</button>
+                        </li>
+                        <li class="list-group-item">Timezone: <span id="dashUserTimezone">N/A</span></li>
+                        <li class="list-group-item">Messages Remaining: <span id="dashMessagesRemaining">N/A</span></li>
+                        <li class="list-group-item">Storage Used: <span id="dashStorageUsed">N/A</span> / <span id="dashStorageLimit">N/A</span></li>
+                    </ul>
+                </div>
+                 <div class="card quick-actions-card mb-4">
+                    <div class="card-header">
+                        Quick Actions
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <button type="button" id="createCronMessageBtn" class="list-group-item list-group-item-action">Create New Cron Message</button>
+                        <button type="button" id="createSimpleMessageBtn" class="list-group-item list-group-item-action">Create New Simple Cron Message</button>
+                        <button type="button" id="inAppMessagingQuickBtn" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            In-App Messages
+                            <span id="quickActionUnreadCount" class="badge rounded-pill"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="generalDashboardMessage" class="alert mt-3" style="display: none;"></div>
+
+    </main>
+<!--#include virtual="/_footer.html" -->
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script> 
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
