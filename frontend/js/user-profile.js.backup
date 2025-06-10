@@ -1,11 +1,9 @@
 // /frontend/js/user-profile.js
-// version 1.11 (Fix and Sort Timezones by GMT offset)
+// version 1.10 (Display Timezone with GMT offset)
 // Changelog:
-// - Re-engineered timezone offset calculation for accuracy across all browsers.
-// - Sorted timezone list based on GMT offset (-12 to +14) for better user experience.
-// - Maintained IANA timezone name as the value for backend compatibility.
+// - Updated timezone display to include GMT offset (e.g., "[GMT +07:00] - Asia/Saigon").
 
-console.log("--- user-profile.js SCRIPT STARTED (v1.11) ---");
+console.log("--- user-profile.js SCRIPT STARTED (v1.10) ---");
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log("--- user-profile.js DOMContentLoaded ---");
@@ -56,84 +54,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // NEW: Robustly gets the GMT offset in minutes for any IANA timezone
-    function getIanaTimezoneOffsetMinutes(ianaTimeZone) {
-        const date = new Date();
-        const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-        const targetDate = new Date(date.toLocaleString('en-US', { timeZone: ianaTimeZone }));
-        return (targetDate.getTime() - utcDate.getTime()) / (1000 * 60);
+    // NEW FUNCTION: Format timezone to include GMT offset
+    function formatTimezone(ianaTimezone) {
+        if (!ianaTimezone) return "Unknown Timezone";
+        try {
+            const date = new Date();
+            const utcDate = new Date(date.toUTCString());
+            const localDate = new Date(date.toLocaleString('en-US', { timeZone: ianaTimezone }));
+            const offsetMillis = localDate.getTime() - utcDate.getTime();
+            const offsetHours = offsetMillis / (1000 * 60 * 60);
+            const sign = offsetHours >= 0 ? '+' : '';
+            const formattedOffset = `GMT ${sign}${String(Math.floor(offsetHours)).padStart(2, '0')}:${String(Math.abs(Math.round((offsetHours % 1) * 60))).padStart(2, '0')}`;
+            return `[${formattedOffset}] - ${ianaTimezone}`;
+        } catch (e) {
+            console.warn(`Could not format timezone ${ianaTimezone}: ${e}`);
+            return ianaTimezone; // Fallback to raw IANA if formatting fails
+        }
     }
 
-    // NEW: Formats the raw minute offset into a [GMT ±HH:mm] string
-    function formatGmtOffset(offsetMinutes) {
-        const sign = offsetMinutes >= 0 ? '+' : '-';
-        const absOffset = Math.abs(offsetMinutes);
-        const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
-        const minutes = String(absOffset % 60).padStart(2, '0');
-        return `GMT ${sign}${hours}:${minutes}`;
-    }
-
-    // REVISED: Populates the timezone dropdown, now sorted by GMT offset
     function populateTimezoneSelect() {
         if (!timezoneSelect) return;
         try {
-            const allTimezones = Intl.supportedValuesOf('timeZone');
-
-            // Step 1: Create an array of objects with all needed data
-            const timezoneData = allTimezones.map(tz => {
-                const offset = getIanaTimezoneOffsetMinutes(tz);
-                const gmtString = formatGmtOffset(offset);
-                return {
-                    iana: tz,
-                    offset: offset,
-                    label: `[${gmtString}] - ${tz}`
-                };
-            });
-
-            // Step 2: Sort the array by the numerical offset
-            timezoneData.sort((a, b) => a.offset - b.offset);
-            
+            // Use Intl.supportedValuesOf for modern browsers
+            const timezones = Intl.supportedValuesOf('timeZone');
             timezoneSelect.innerHTML = '';
             
+            // Add a default empty/placeholder option
             const defaultOption = document.createElement('option');
             defaultOption.value = "";
             defaultOption.textContent = "Select your timezone";
             defaultOption.disabled = true;
             defaultOption.selected = true;
             timezoneSelect.appendChild(defaultOption);
-            
-            // Step 3: Populate the select element from the sorted array
-            timezoneData.forEach(tzInfo => {
+
+            timezones.forEach(tz => {
                 const option = document.createElement('option');
-                option.value = tzInfo.iana;      // The value sent to server is the IANA name
-                option.textContent = tzInfo.label; // The text displayed to the user is the formatted label
+                option.value = tz;
+                option.textContent = formatTimezone(tz); // Use new formatTimezone function
                 timezoneSelect.appendChild(option);
             });
-
         } catch (e) {
             console.error("Could not get timezones from Intl API. Falling back to hardcoded options.", e);
-            // Fallback list remains as a safeguard
             timezoneSelect.innerHTML = `
                 <option value="">Select your timezone</option>
-                <option value="Etc/GMT+12">[GMT -12:00] - Etc/GMT+12</option>
-                <option value="Pacific/Midway">[GMT -11:00] - Pacific/Midway</option>
-                <option value="America/Adak">[GMT -09:00] - America/Adak</option>
-                <option value="America/Los_Angeles">[GMT -07:00] - America/Los_Angeles</option>
-                <option value="America/Denver">[GMT -06:00] - America/Denver</option>
-                <option value="America/Chicago">[GMT -05:00] - America/Chicago</option>
-                <option value="America/New_York">[GMT -04:00] - America/New_York</option>
                 <option value="Etc/UTC">[GMT +00:00] - Etc/UTC</option>
-                <option value="Europe/London">[GMT +01:00] - Europe/London</option>
-                <option value="Europe/Paris">[GMT +02:00] - Europe/Paris</option>
-                <option value="Asia/Jerusalem">[GMT +03:00] - Asia/Jerusalem</option>
-                <option value="Asia/Dubai">[GMT +04:00] - Asia/Dubai</option>
-                <option value="Asia/Tashkent">[GMT +05:00] - Asia/Tashkent</option>
-                <option value="Asia/Dhaka">[GMT +06:00] - Asia/Dhaka</option>
                 <option value="Asia/Ho_Chi_Minh">[GMT +07:00] - Asia/Ho_Chi_Minh</option>
-                <option value="Asia/Singapore">[GMT +08:00] - Asia/Singapore</option>
-                <option value="Asia/Tokyo">[GMT +09:00] - Asia/Tokyo</option>
-                <option value="Australia/Sydney">[GMT +11:00] - Australia/Sydney</option>
-                <option value="Pacific/Auckland">[GMT +13:00] - Pacific/Auckland</option>
+                <option value="America/New_York">[GMT -04:00] - America/New_York</option>
+                <option value="Europe/London">[GMT +01:00] - Europe/London</option>
             `;
         }
     }
@@ -141,16 +108,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateAccessHistoryTable(history) {
         if (!accessHistoryTableBody) return;
         accessHistoryTableBody.innerHTML = '';
-
         if (!history || history.length === 0) {
             accessHistoryTableBody.innerHTML = '<tr><td colspan="3" class="text-center">No history found.</td></tr>';
             return;
         }
-
-        // NEW: Ensure we only process and display a maximum of 10 records
-        const recordsToDisplay = history.slice(0, 10);
-
-        recordsToDisplay.forEach(entry => {
+        history.forEach(entry => {
             const tr = document.createElement('tr');
             const loginTime = new Date(entry.login_time).toLocaleString();
             tr.innerHTML = `
@@ -176,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             } else if (response.status !== 404) {
-                console.warn("Could not fetch user review:", response.status);
+                 console.warn("Could not fetch user review:", response.status);
             }
         } catch (error) {
             console.error("Error fetching user review:", error);
@@ -200,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchAndPopulateUserData() {
-        populateTimezoneSelect(); // This now populates the sorted, correctly formatted list
+        populateTimezoneSelect(); // Populate with formatted timezones
         try {
             const response = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${accessToken}` } });
             if (response.status === 401) { window.location.href = '/signin.html?status=session_expired'; return; }
@@ -211,20 +173,24 @@ document.addEventListener('DOMContentLoaded', () => {
             emailInput.value = data.email;
             userNameInput.value = data.user_name || '';
 
+            // Set the value of the select directly to the IANA timezone string
             const userTimezone = data.timezone || 'Etc/UTC';
-            let timezoneOptionExists = [...timezoneSelect.options].some(opt => opt.value === userTimezone);
+            let timezoneOptionExists = false;
+            for (let i = 0; i < timezoneSelect.options.length; i++) {
+                if (timezoneSelect.options[i].value === userTimezone) {
+                    timezoneOptionExists = true;
+                    break;
+                }
+            }
     
             if (!timezoneOptionExists) {
                 console.warn(`User's saved timezone "${userTimezone}" not found in browser's list. Adding it temporarily.`);
                 const option = document.createElement('option');
-                const offset = getIanaTimezoneOffsetMinutes(userTimezone);
-                const gmtString = formatGmtOffset(offset);
                 option.value = userTimezone;
-                option.textContent = `[${gmtString}] - ${userTimezone}`;
-                // Prepend it so it's easy to find, but we won't try to sort it into the list
+                option.textContent = formatTimezone(userTimezone); // Format the newly added option
                 timezoneSelect.prepend(option);
             }
-            timezoneSelect.value = userTimezone;
+            timezoneSelect.value = userTimezone; // Set the select value to the raw IANA string
 
             trustVerifierEmailInput.value = data.trust_verifier_email || '';
             document.getElementById('pinQuestion').value = data.pin_code_question || '';
@@ -257,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // --- Event Listeners (No changes below this line) ---
+    // --- Event Listeners ---
     
     if (showPasswordToggle) {
         showPasswordToggle.addEventListener('change', () => {

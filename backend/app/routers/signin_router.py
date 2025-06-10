@@ -17,12 +17,12 @@ from ..db.database import get_db_session
 from ..db.models import User, LoginHistory, Message, UserAccountStatusEnum, UserConfiguration # Thêm Message, UserAccountStatusEnum, UserConfiguration
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload # Để load UserConfiguration
+from sqlalchemy import delete
+from sqlalchemy.orm import selectinload
 
 import bcrypt
 from jose import jwt as python_jose_jwt
 
-# Giả sử limiter được import từ auth_router hoặc một module chung
 try:
     from .auth_router import limiter as global_limiter
 except ImportError:
@@ -173,6 +173,26 @@ async def signin_user_endpoint(
         device_os=device_os_info
     )
     db_session.add(login_entry_success)
+
+    # --- START: LOGIC MỚI ĐỂ GIỚI HẠN LỊCH SỬ TRUY CẬP ---
+    # Lấy danh sách ID của tất cả lịch sử, sắp xếp từ mới nhất đến cũ nhất
+    history_ids_stmt = select(LoginHistory.id).where(
+        LoginHistory.user_id == user.id
+    ).order_by(LoginHistory.login_time.desc())
+    
+    history_ids_result = await db_session.execute(history_ids_stmt)
+    all_history_ids = history_ids_result.scalars().all()
+
+    # Nếu số lượng lịch sử (bao gồm cả cái vừa thêm) lớn hơn 10, hãy xóa những cái cũ nhất
+    if len(all_history_ids) > 10:
+        # Lấy ID của những bản ghi cũ cần xóa (tất cả những cái sau bản ghi thứ 10)
+        ids_to_delete = all_history_ids[10:]
+        
+        # Tạo và thực thi câu lệnh xóa
+        delete_stmt = delete(LoginHistory).where(LoginHistory.id.in_(ids_to_delete))
+        await db_session.execute(delete_stmt)
+        logger.info(f"Pruned {len(ids_to_delete)} old login history records for user {user.email}.")
+    # --- END: LOGIC MỚI ---    
     
     try:
         await db_session.commit()
