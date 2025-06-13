@@ -1,5 +1,8 @@
 # backend/app/main.py
-# version 1.13.0 (thêm user_profile_router)
+# version 1.14.0 (load .env file on startup)
+
+from dotenv import load_dotenv
+load_dotenv()
 
 import os
 import logging
@@ -7,6 +10,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request as FastAPIRequest
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.cors import CORSMiddleware
+
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 # Import cho Rate Limiting
 from slowapi import _rate_limit_exceeded_handler
@@ -30,7 +35,6 @@ from .routers import (
     messaging_router,
     user_actions_router,
     admin_router
-    # utils_router
 )
 
 from .db.database import engine 
@@ -39,13 +43,7 @@ from .db.database import engine
 async def lifespan(app: FastAPI):
     logger.info("Application starting up with full features...")
     logger.info("Database engine initialized (schema assumed to be created by init.sql).")
-    # Test kết nối DB trong lifespan (nếu cần, nhưng đã thành công trước đó)
-    # try:
-    #     async with engine.connect() as conn:
-    #         await conn.execute(text("SELECT 1"))
-    #         logger.info("Lifespan DB connection test SUCCEEDED.")
-    # except Exception as e:
-    #     logger.error(f"Lifespan DB connection test FAILED: {e}", exc_info=True)
+
     yield
     logger.info("Application shutting down: Disposing database engine...")
     if engine is not None:
@@ -54,7 +52,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CronPost API", 
-    version="1.0.0",    
+    version="1.0.0",
     description="Backend API for CronPost, handling user authentication, message scheduling, and delivery.",
     lifespan=lifespan,
     openapi_version="3.1.0",
@@ -68,10 +66,22 @@ app = FastAPI(
 
 # --- MIDDLEWARE ---
 
+# 0. Proxy Headers Middleware (BẮT BUỘC đặt trước Rate Limiting)
+TRUSTED_HOSTS_STR = os.environ.get("TRUSTED_HOSTS", "127.0.0.1")
+TRUSTED_HOSTS_LIST = [h.strip() for h in TRUSTED_HOSTS_STR.split(',')]
+# --- THÊM DÒNG LOG NÀY ---
+logger.info(f"PROXY MIDDLEWARE INITIALIZED. TRUSTED HOSTS: {TRUSTED_HOSTS_LIST}")
+# -------------------------
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts=TRUSTED_HOSTS_LIST
+)
+logger.info(f"ProxyHeadersMiddleware configured for trusted hosts: {TRUSTED_HOSTS_LIST}")
+
 # 1. Rate Limiting Middleware
-app.state.limiter = limiter 
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler) 
-app.add_middleware(SlowAPIMiddleware) 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 logger.info("SlowAPI Rate Limiting Middleware configured.")
 
 # 2. Session Middleware
@@ -118,7 +128,7 @@ app.include_router(message_router.router, prefix="/messages")
 app.include_router(messaging_router.router, prefix="/messaging")
 app.include_router(user_actions_router.router, prefix="/users")
 app.include_router(admin_router.router, prefix="/admin")
-# app.include_router(utils_router.router, prefix="/utils")
+
 logger.info("Auth, signin, password_reset, user, message, messaging, user_actions, admin routers included.")
 
 # --- Root Endpoints ---

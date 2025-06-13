@@ -1,9 +1,9 @@
 # /backend/app/db/models.py
-# Version: 2.8.0
+# Version: 2.9.0
 # Changelog:
-# - Added UserBlock and SimpleCronMessage models to match init.sql v2.8.0.
-# - Added corresponding relationships to the User model.
-# - Added new Enum types for SCM.
+# - Added UserSmtpSettings model to support user-defined SMTP.
+# - Added SendingMethodEnum.
+# - Updated User, Message, SimpleCronMessage, and SendingHistory models to reflect DB changes.
 
 import enum
 import uuid
@@ -33,9 +33,14 @@ class SendingAttemptStatusEnum(str, enum.Enum): success='success'; failed='faile
 class CheckinMethodEnum(str, enum.Enum): login_auto='login_auto'; manual_button='manual_button'; email_link='email_link'; telegram_command='telegram_command'; pin_input='pin_input'
 class OttOptInStatusEnum(str, enum.Enum): pending_verification='pending_verification'; active='active'; revoked_by_receiver='revoked_by_receiver'; revoked_by_user='revoked_by_user'; failed_verification='failed_verification'; unlinked='unlinked'
 class RatingPointsEnum(str, enum.Enum): _1='_1'; _2='_2'; _3='_3'; _4='_4'; _5='_5'
-# ENUMs mới
 class SCMScheduleTypeEnum(str, enum.Enum): loop='loop'; unloop='unloop'
 class SCMStatusEnum(str, enum.Enum): active='active'; inactive='inactive'; paused='paused'
+
+# NEW ENUM for v2.9.0
+class SendingMethodEnum(str, enum.Enum):
+    cronpost_email = 'cronpost_email'
+    in_app_messaging = 'in_app_messaging'
+    user_email = 'user_email'
 
 
 # --- Định nghĩa các Model Bảng ---
@@ -92,9 +97,28 @@ class User(Base):
     message_threads_as_user2 = relationship("MessageThread", foreign_keys="[MessageThread.user2_id]", back_populates="user2", cascade="all, delete-orphan")
     sent_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.sender_id]", back_populates="sender", cascade="all, delete-orphan")
     received_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.receiver_id]", back_populates="receiver", cascade="all, delete-orphan")
-    # Relationships cho bảng mới
     simple_cron_messages = relationship("SimpleCronMessage", back_populates="user", cascade="all, delete-orphan")
     user_blocks = relationship("UserBlock", foreign_keys="[UserBlock.blocker_user_id]", back_populates="blocker", cascade="all, delete-orphan")
+    # New Relationship for v2.9.0
+    smtp_settings = relationship("UserSmtpSettings", uselist=False, back_populates="user", cascade="all, delete-orphan")
+
+
+# NEW MODEL for v2.9.0
+class UserSmtpSettings(Base):
+    __tablename__ = 'user_smtp_settings'
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    smtp_server = Column(Text, nullable=False)
+    smtp_port = Column(Integer, nullable=False)
+    smtp_sender_email = Column(Text, nullable=False)
+    smtp_password_encrypted = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
+    last_test_successful = Column(Boolean, nullable=True)
+    last_test_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
+    user = relationship("User", back_populates="smtp_settings")
+
 
 class EmailConfirmation(Base):
     __tablename__ = 'email_confirmations'
@@ -166,6 +190,7 @@ class Message(Base):
     __tablename__ = 'messages'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    sending_method = Column(SQLAlchemyEnum(SendingMethodEnum, name='sending_method_enum', create_type=False), nullable=False, default=SendingMethodEnum.cronpost_email)
     message_order = Column(Integer, default=0, nullable=False)
     message_title = Column(Text)
     message_content = Column(Text, nullable=False)
@@ -205,11 +230,17 @@ class FmSchedule(Base):
     message = relationship("Message", back_populates="fm_schedule")
 
 class SendingHistory(Base):
-    __tablename__ = 'sending_history'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), nullable=False); receiver_id = Column(UUID(as_uuid=True), ForeignKey('message_receivers.id', ondelete="CASCADE"), nullable=False)
-    sending_method = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False); sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
-    status = Column(SQLAlchemyEnum(SendingAttemptStatusEnum, name='sending_attempt_status_enum', create_type=False), nullable=False); status_details = Column(Text); receiver_address_snapshot = Column(Text, nullable=False)
+    __tablename__ = 'sending_history'
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), nullable=False)
+    receiver_id = Column(UUID(as_uuid=True), ForeignKey('message_receivers.id', ondelete="CASCADE"), nullable=False)
+    sending_method_snapshot = Column(SQLAlchemyEnum(SendingMethodEnum, name='sending_method_enum', create_type=False), nullable=False)
+    sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    status = Column(SQLAlchemyEnum(SendingAttemptStatusEnum, name='sending_attempt_status_enum', create_type=False), nullable=False)
+    status_details = Column(Text)
+    receiver_address_snapshot = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
 
 class CheckinLog(Base):
     __tablename__ = 'checkin_log'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
@@ -291,6 +322,7 @@ class SimpleCronMessage(Base):
     __tablename__ = 'simple_cron_messages'
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    sending_method = Column(SQLAlchemyEnum(SendingMethodEnum, name='sending_method_enum', create_type=False), nullable=False, default=SendingMethodEnum.cronpost_email)
     title = Column(Text)
     content = Column(Text, nullable=False)
     receiver_address = Column(Text, nullable=False)

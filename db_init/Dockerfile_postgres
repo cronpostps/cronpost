@@ -1,0 +1,14 @@
+# ./db_init/Dockerfile_postgres
+# Version: 2.0.0 (Switch to Debian base for locale support)
+
+FROM postgres:15
+
+# Debian-based image has built-in locale support.
+# Set environment variables to ensure UTF-8 is used by default for the new database cluster.
+ENV LANG en_US.utf8
+ENV LC_ALL en_US.utf8
+
+# Copy database initialization script
+COPY ./init.sql /docker-entrypoint-initdb.d/
+
+EXPOSE 5432

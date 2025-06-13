@@ -1,5 +1,5 @@
 # # backend/models/user_model.py
-# version 1.1
+# version 1.2 (Add SMTP settings models)
 
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
@@ -35,3 +35,27 @@ class UserResponse(BaseModel): # Model cho thông tin user trả về sau khi đ
 
     class Config:
         from_attributes = True
+
+# SMTP Settings Models
+
+class UserSmtpSettingsResponse(BaseModel):
+    """Schema for returning SMTP settings, excluding sensitive data."""
+    smtp_server: str
+    smtp_port: int
+    smtp_sender_email: str
+    is_active: bool
+
+    class Config:
+        orm_mode = True
+
+class UserSmtpSettingsUpdate(BaseModel):
+    """Schema for creating or updating SMTP settings."""
+    smtp_server: str
+    smtp_port: int
+    smtp_sender_email: EmailStr
+    smtp_password: str
+
+class SmtpTestResponse(BaseModel):
+    """Response model for SMTP test results."""
+    success: bool
+    message: str 

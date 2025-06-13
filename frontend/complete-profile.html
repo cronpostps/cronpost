@@ -1,0 +1,57 @@
+<!-- /frontend/complete-profile.html -->
+<!-- version 1.0 -->
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <title>Complete Your Profile - CronPost</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-dark auth-page">
+    <header id="main-header" class="site-header container">
+        <div class="header-wrapper">
+            <div class="row">
+                <div class="col-12 text-center">
+                    <div class="site-branding">
+                        <a href="/"><h1>CronPost</h1></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <main id="main-content" class="container">
+        <section class="auth-form-section">
+            <div class="row justify-content-center">
+                <div class="col-md-6 col-lg-5">
+                    <div class="auth-form-container">
+                        <h2 class="text-center mb-2">Welcome!</h2>
+                        <p class="text-center text-muted mb-4">Just one last step. Please confirm your timezone to continue.</p>
+                        
+                        <div id="formStatusMessage" class="alert mt-3" style="display: none;"></div>
+
+                        <form id="completeProfileForm" novalidate>
+                            <div class="form-group mb-3">
+                                <label for="timezone" class="form-label">Your Timezone</label>
+                                <select class="form-select" id="timezone" required>
+                                    <option value="">Loading timezones...</option>
+                                </select>
+                                <div class="form-text mt-2">We've automatically detected your timezone, but you can change it here.</div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100 mt-3">Save and Continue</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <!--#include virtual="/_footer.html" -->
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/complete-profile.js"></script>
+    </body>
+</html>

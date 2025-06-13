@@ -1,6 +1,5 @@
 # docker-compose.yml
-# Version: 2.3
-# Mô tả: Loại bỏ service n8n và các cấu hình liên quan.
+# Version: 2.4.0 (add dockerfile_postgres)
 
 services:
   frontend_nginx:
@@ -34,7 +33,9 @@ services:
         condition: service_healthy
 
   db:
-    image: postgres:15-alpine
+    build:
+      context: ./db_init
+      dockerfile: Dockerfile_postgres
     container_name: cronpost_postgres
     ports:
       - "5432:5432"
@@ -42,7 +43,7 @@ services:
       - ./.env
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./db_init:/docker-entrypoint-initdb.d
+      - ./db_init/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - cronpost_network
     healthcheck:

@@ -1,0 +1,89 @@
+# nginx/nginx.conf
+# Version 1.5 (Added rule for clean URLs like /reset-password)
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;
+    keepalive_timeout 65;
+    
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    server {
+        listen 80;
+        server_name localhost;
+        
+        root /usr/share/nginx/html;
+        index index.html;
+        ssi on;
+
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log debug;
+
+        # 1. Xử lý URL /reset-password (không có .html)
+        location = /reset-password {
+            try_files /reset-password.html =404; # Thử tìm reset-password.html, nếu không có thì 404
+        }
+        
+        # 2. Phục vụ các file tĩnh của frontend (HTML, CSS, JS, images, etc.)
+        # Đây là location tổng quát, cần đứng sau các location cụ thể hơn
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # 3. Xử lý request cho OpenAPI schema JSON
+        location = /api/openapi.json {
+            rewrite ^/api(/.*)$ $1 break;
+            proxy_pass http://backend_python:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Scheme $scheme;
+            proxy_hide_header 'Content-Type'; 
+            add_header 'Content-Type' 'application/json; charset=utf-8' always;
+            gzip off;
+        }
+
+        # 4. Xử lý request cho Swagger UI và ReDoc
+        location ~ ^/api/(docs|redoc)$ { 
+            rewrite ^/api(/.*)$ $1 break;
+            proxy_pass http://backend_python:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Scheme $scheme;
+        }
+        
+        # 5. Xử lý tất cả các API endpoint có tiền tố /api/
+        location /api/ {
+            rewrite ^/api(/.*)$ $1 break;
+            proxy_pass http://backend_python:8000;
+
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Scheme $scheme;
+
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+
+        # Xử lý trang lỗi chung
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/nginx/html; 
+        }
+    }
+}

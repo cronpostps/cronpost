@@ -101,3 +101,146 @@ function toggleFormElementsDisabled(formElement, disable, buttonTextWhileDisable
         googleBtn.disabled = disable;
     }
 }
+
+/**
+ * Formats an ISO timestamp string into a human-readable string in a specific timezone.
+ * @param {string} isoTimestamp - The ISO 8601 timestamp string from the backend.
+ * @param {string} targetTimezone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
+ * @returns {string} A formatted date-time string or 'N/A'.
+ */
+function formatTimestampInZone(isoTimestamp, targetTimezone) {
+    if (!isoTimestamp) {
+        return 'N/A';
+    }
+
+    // Validate the targetTimezone to prevent errors
+    let validTimezone = 'UTC'; // Default to UTC
+    try {
+        // The 'timeZone' option in Intl.DateTimeFormat will throw an error for invalid timezones.
+        // We can use this to validate.
+        new Intl.DateTimeFormat(undefined, { timeZone: targetTimezone });
+        validTimezone = targetTimezone;
+    } catch (e) {
+        console.warn(`Invalid or unsupported timezone provided: "${targetTimezone}". Falling back to UTC.`);
+    }
+
+    try {
+        const date = new Date(isoTimestamp);
+        
+        // Use Intl.DateTimeFormat for robust, localized formatting
+        const formatter = new Intl.DateTimeFormat('en-GB', { // en-GB for dd/mm/yyyy format
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false, // Use 24-hour format
+            timeZone: validTimezone
+        });
+
+        return formatter.format(date);
+    } catch (error) {
+        console.error(`Error formatting date for timezone ${validTimezone}:`, error);
+        // Fallback for safety
+        return new Date(isoTimestamp).toLocaleString();
+    }
+}
+
+/**
+ * Calculates the GMT offset in minutes for a given IANA timezone.
+ * @param {string} ianaTimeZone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
+ * @returns {number} The offset from GMT in minutes.
+ */
+function getIanaTimezoneOffsetMinutes(ianaTimeZone) {
+    try {
+        const date = new Date();
+        const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const targetDate = new Date(date.toLocaleString('en-US', { timeZone: ianaTimeZone }));
+        return (targetDate.getTime() - utcDate.getTime()) / (1000 * 60);
+    } catch (e) {
+        console.error(`Could not calculate offset for timezone: ${ianaTimeZone}`, e);
+        return 0;
+    }
+}
+
+/**
+ * Formats a minute offset into a [GMT ±HH:mm] string.
+ * @param {number} offsetMinutes - The offset in minutes.
+ * @returns {string} The formatted GMT string.
+ */
+function formatGmtOffset(offsetMinutes) {
+    const sign = offsetMinutes >= 0 ? '+' : '-';
+    const absOffset = Math.abs(offsetMinutes);
+    const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+    const minutes = String(absOffset % 60).padStart(2, '0');
+    return `GMT ${sign}${hours}:${minutes}`;
+}
+
+/**
+ * Formats an ISO timestamp string into a human-readable string in a specific timezone.
+ * @param {string} isoTimestamp - The ISO 8601 timestamp string from the backend.
+ * @param {string} targetTimezone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
+ * @returns {string} A formatted date-time string or 'N/A'.
+ */
+function formatTimestampInZone(isoTimestamp, targetTimezone) {
+    if (!isoTimestamp) {
+        return 'N/A';
+    }
+
+    let validTimezone = 'UTC';
+    try {
+        new Intl.DateTimeFormat(undefined, { timeZone: targetTimezone });
+        validTimezone = targetTimezone;
+    } catch (e) {
+        console.warn(`Invalid or unsupported timezone provided: "${targetTimezone}". Falling back to UTC.`);
+    }
+
+    try {
+        const date = new Date(isoTimestamp);
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+            timeZone: validTimezone
+        });
+        return formatter.format(date);
+    } catch (error) {
+        console.error(`Error formatting date for timezone ${validTimezone}:`, error);
+        return new Date(isoTimestamp).toLocaleString();
+    }
+}
+
+// /**
+//  * Calculates the GMT offset in minutes for a given IANA timezone.
+//  * @param {string} ianaTimeZone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
+//  * @returns {number} The offset from GMT in minutes.
+//  */
+// function getIanaTimezoneOffsetMinutes(ianaTimeZone) {
+//     try {
+//         const date = new Date();
+//         const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+//         const targetDate = new Date(date.toLocaleString('en-US', { timeZone: ianaTimeZone }));
+//         return (targetDate.getTime() - utcDate.getTime()) / (1000 * 60);
+//     } catch (e) {
+//         console.error(`Could not calculate offset for timezone: ${ianaTimeZone}`, e);
+//         return 0; // Fallback to 0 offset on error
+//     }
+// }
+
+// /**
+//  * Formats a minute offset into a [GMT ±HH:mm] string.
+//  * @param {number} offsetMinutes - The offset in minutes.
+//  * @returns {string} The formatted GMT string.
+//  */
+// function formatGmtOffset(offsetMinutes) {
+//     const sign = offsetMinutes >= 0 ? '+' : '-';
+//     const absOffset = Math.abs(offsetMinutes);
+//     const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+//     const minutes = String(absOffset % 60).padStart(2, '0');
+//     return `GMT ${sign}${hours}:${minutes}`;
+// }

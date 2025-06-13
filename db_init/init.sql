@@ -1,6 +1,6 @@
 -- SQL KHỞI TẠO POSTGRES DATABASE DUY NHẤT
--- VERSION: 2.8.1
--- Mô tả: Thêm bảng user_blocks và simple_cron_messages. Thêm trường checkin_on_signin vào bảng users.
+-- VERSION: 2.9.0
+-- Mô tả: Thêm bảng user_smtp_settings để hỗ trợ phương thức gửi "user-email". Cập nhật system_settings với các giới hạn người nhận mới.
 
 -- KÍCH HOẠT EXTENSION CẦN THIẾT
 CREATE EXTENSION IF NOT EXISTS moddatetime; 
@@ -13,6 +13,8 @@ CREATE TYPE public.clc_type_enum AS ENUM ('every_day','specific_days','day_of_we
 CREATE TYPE public.day_of_week_enum AS ENUM ('Mon','Tue','Wed','Thu','Fri','Sat','Sun');
 CREATE TYPE public.wct_duration_unit_enum AS ENUM ('minutes','hours');
 CREATE TYPE public.message_overall_status_enum AS ENUM ('pending','processing','partially_sent','sent','failed','cancelled');
+-- NEW ENUM for v2.9.0
+CREATE TYPE public.sending_method_enum AS ENUM ('cronpost_email', 'in_app_messaging', 'user_email');
 CREATE TYPE public.receiver_channel_enum AS ENUM ('email','telegram');
 CREATE TYPE public.individual_send_status_enum AS ENUM ('pending','sent','failed','skipped');
 CREATE TYPE public.fm_schedule_trigger_type_enum AS ENUM ('days_after_im_sent','day_of_week','date_of_month','date_of_year','specific_date');
@@ -20,7 +22,6 @@ CREATE TYPE public.sending_attempt_status_enum AS ENUM ('success','failed','retr
 CREATE TYPE public.checkin_method_enum AS ENUM ('login_auto','manual_button','email_link','telegram_command','pin_input');
 CREATE TYPE public.ott_opt_in_status_enum AS ENUM ('pending_verification','active','revoked_by_receiver','revoked_by_user','failed_verification','unlinked');
 CREATE TYPE public.rating_points_enum AS ENUM ('_1','_2','_3','_4','_5');
--- ENUMs mới cho SCM
 CREATE TYPE public.scm_schedule_type_enum AS ENUM ('loop', 'unloop');
 CREATE TYPE public.scm_status_enum AS ENUM ('active', 'inactive', 'paused');
 
@@ -65,6 +66,21 @@ CREATE TABLE public.users (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+-- Bảng user_smtp_settings (NEW for v2.9.0)
+CREATE TABLE public.user_smtp_settings (
+    user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+    smtp_server TEXT NOT NULL,
+    smtp_port INT NOT NULL CHECK (smtp_port IN (465, 587)),
+    smtp_sender_email TEXT NOT NULL,
+    smtp_password_encrypted TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT FALSE NOT NULL,
+    last_test_successful BOOLEAN,
+    last_test_message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
 
 -- Bảng email_confirmations
 CREATE TABLE public.email_confirmations (
@@ -127,6 +143,7 @@ CREATE TABLE public.uploaded_files (
 CREATE TABLE public.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    sending_method public.sending_method_enum NOT NULL DEFAULT 'cronpost_email', -- UPDATED for v2.9.0
     message_order INT NOT NULL DEFAULT 0,
     message_title TEXT,
     message_content TEXT NOT NULL,
@@ -178,7 +195,7 @@ CREATE TABLE public.sending_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
     receiver_id UUID NOT NULL REFERENCES public.message_receivers(id) ON DELETE CASCADE,
-    sending_method public.receiver_channel_enum NOT NULL,
+    sending_method_snapshot public.sending_method_enum NOT NULL, -- UPDATED for v2.9.0
     sent_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     status public.sending_attempt_status_enum NOT NULL,
     status_details TEXT,
@@ -290,6 +307,7 @@ CREATE TABLE public.user_blocks (
 CREATE TABLE public.simple_cron_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    sending_method public.sending_method_enum NOT NULL DEFAULT 'cronpost_email', -- UPDATED for v2.9.0
     title TEXT,
     content TEXT NOT NULL,
     receiver_address TEXT NOT NULL,
@@ -325,6 +343,7 @@ FOR EACH ROW
 EXECUTE FUNCTION public.check_fm_message_not_initial();
 
 CREATE TRIGGER handle_updated_at_users BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
+CREATE TRIGGER handle_updated_at_user_smtp_settings BEFORE UPDATE ON public.user_smtp_settings FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at); -- NEW for v2.9.0
 CREATE TRIGGER handle_updated_at_email_confirmations BEFORE UPDATE ON public.email_confirmations FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_user_configurations BEFORE UPDATE ON public.user_configurations FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_messages BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
@@ -337,7 +356,6 @@ CREATE TRIGGER handle_updated_at_password_reset_tokens BEFORE UPDATE ON public.p
 CREATE TRIGGER handle_updated_at_uploaded_files BEFORE UPDATE ON public.uploaded_files FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_message_threads BEFORE UPDATE ON public.message_threads FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_in_app_messages BEFORE UPDATE ON public.in_app_messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
--- Trigger cho bảng mới
 CREATE TRIGGER handle_updated_at_simple_cron_messages BEFORE UPDATE ON public.simple_cron_messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 
 
@@ -368,7 +386,6 @@ CREATE INDEX IF NOT EXISTS idx_in_app_messages_thread_id_sent_at ON public.in_ap
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_sender_id ON public.in_app_messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_receiver_id ON public.in_app_messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_attachment_file_id ON public.in_app_messages(attachment_file_id);
--- Indexes cho bảng mới
 CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked_id ON public.user_blocks(blocked_user_id);
 CREATE INDEX IF NOT EXISTS idx_scm_user_id ON public.simple_cron_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_scm_next_send_at ON public.simple_cron_messages(next_send_at) WHERE status = 'active';
@@ -408,7 +425,11 @@ INSERT INTO public.system_settings (setting_key, setting_value, description, val
     ('max_stored_messages_premium', '10000', 'Maximum messages stored in premium account', 'integer', true),
     ('premium_lifetime_price_usd', '10', 'The lifetime price in USD for the Premium plan', 'float', true),
     ('email_sending_rate_per_hours', '50', 'System-wide email sending frequency to ensure compliance with SMTP server regulations', 'integer', true),
-    ('wct_final_reminder_minutes', '3', 'Final WCT reminder time before it ends (minutes)', 'integer', true)
+    ('wct_final_reminder_minutes', '3', 'Final WCT reminder time before it ends (minutes)', 'integer', true),
+    -- NEW SETTINGS FOR v2.9.0
+    ('receivers_limit_cronpost_email', '5', 'Limit the number of recipients in the cronpost-email sending method', 'integer', true),
+    ('receivers_limit_in_app_messaging', '10', 'Limit the number of recipients in the In-App-Messaging sending method', 'integer', true),
+    ('receivers_limit_user_email', '10', 'Limit the number of recipients in the user-email sending method', 'integer', true)
 ON CONFLICT (setting_key) DO UPDATE SET 
     setting_value = EXCLUDED.setting_value,
     description = EXCLUDED.description,

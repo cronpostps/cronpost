@@ -44,7 +44,7 @@ from ..services.email_service import send_email_async
 logger = logging.getLogger(__name__)
 
 # --- Rate Limiter ---
-limiter = Limiter(key_func=get_remote_address, default_limits=["1000/day", "100/hour", "10/minute"])
+limiter = Limiter(key_func=get_remote_address, default_limits=["5000/day", "300/hour", "60/minute"])
 SIGNUP_RATE_LIMIT = "3/hour"
 RESEND_CONFIRMATION_EMAIL_INTERVAL_MINUTES_INT = int(os.environ.get("RESEND_CONFIRMATION_EMAIL_INTERVAL_MINUTES", "30"))
 RESEND_CONFIRMATION_RATE_LIMIT = f"1/{RESEND_CONFIRMATION_EMAIL_INTERVAL_MINUTES_INT}minute"
@@ -127,7 +127,9 @@ async def dispatch_send_google_welcome_email(email:str,name:Optional[str],pw:str
 @router.post("/signup",response_model=UserResponse,status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(SIGNUP_RATE_LIMIT)
 async def signup_user_endpoint(ud:UserCreateRequest,request:FastAPIRequest,bg:BackgroundTasks,db:AsyncSession=Depends(get_db_session)):
-    logger.info(f"Signup: {ud.email} from IP: {request.client.host if request.client else 'N/A'}")
+    
+    logger.info(f"Received signup payload: {ud.dict()}")
+    
     if not await verify_turnstile_captcha(token=ud.captchaToken, client_ip=request.client.host if request.client else None):
         raise HTTPException(status.HTTP_400_BAD_REQUEST,"Invalid CAPTCHA.")
     
@@ -137,24 +139,43 @@ async def signup_user_endpoint(ud:UserCreateRequest,request:FastAPIRequest,bg:Ba
     if user_for_response and user_for_response.is_confirmed_by_email:
         raise HTTPException(status.HTTP_409_CONFLICT,"Email already registered and confirmed.")
     
+    # --- KHỐI LOGIC ĐÃ ĐƯỢC SỬA ---
     if user_for_response:
+        # User đã tồn tại nhưng chưa xác nhận, cập nhật timezone và gửi lại email
+        logger.info(f"Account for {ud.email} exists but is unconfirmed. Updating timezone and resending confirmation.")
+        
+        valid_timezone = user_for_response.timezone # Giữ lại timezone cũ làm mặc định
+        if ud.timezone:
+            try:
+                pytz.timezone(ud.timezone)
+                valid_timezone = ud.timezone
+                logger.info(f"Updating existing unconfirmed user with new timezone: {valid_timezone}")
+            except pytz.UnknownTimeZoneError:
+                logger.warning(f"Received unknown timezone '{ud.timezone}'. Keeping existing timezone '{valid_timezone}'.")
+        
+        user_for_response.timezone = valid_timezone # CẬP NHẬT TIMEZONE CHO USER HIỆN TẠI
+        
         await create_and_dispatch_confirmation_email_payload(db,user_for_response,bg,is_resend=True)
-        transaction_message="Account exists but unconfirmed. A new confirmation email has been sent."
+        transaction_message="Account exists but unconfirmed. Timezone updated and a new confirmation email has been sent."
+    # --- KẾT THÚC KHỐI LOGIC ĐÃ SỬA ---
     else:
+        # Tạo user hoàn toàn mới
         valid_timezone = 'Etc/UTC'
-        if ud.timezone and ud.timezone in pytz.all_timezones:
-            valid_timezone = ud.timezone
-            logger.info(f"Received valid timezone '{valid_timezone}' for new user {ud.email}.")
-        else:
-            logger.warning(f"Invalid or no timezone provided for new user {ud.email}. Defaulting to UTC.")
-
+        if ud.timezone:
+            try:
+                pytz.timezone(ud.timezone)
+                valid_timezone = ud.timezone
+                logger.info(f"Received and validated timezone '{valid_timezone}' for new user {ud.email}.")
+            except pytz.UnknownTimeZoneError:
+                logger.warning(f"Received unknown timezone '{ud.timezone}' for new user {ud.email}. Defaulting to UTC.")
+        
         email_prefix = ud.email.split('@')[0]
         new_user_obj=User(
             email=ud.email, 
             password_hash=hash_password(ud.password), 
             user_name=email_prefix, 
             provider='email',
-            timezone=valid_timezone # Gán timezone đã được xác thực
+            timezone=valid_timezone
         )
         db.add(new_user_obj)
         try:
@@ -163,7 +184,6 @@ async def signup_user_endpoint(ud:UserCreateRequest,request:FastAPIRequest,bg:Ba
             user_for_response = new_user_obj
             transaction_message="Registration successful. Please check your email to verify your account."
         except IntegrityError:
-            # ... (phần xử lý IntegrityError giữ nguyên)
             await db.rollback()
             raise HTTPException(status_code=500, detail="A server conflict occurred during registration. Please try again.")
     
@@ -278,14 +298,12 @@ async def google_oauth_callback(
 
     try:
         code_verifier = request.session.pop('google_oauth_code_verifier', None)
-        # Use Google's token endpoint directly
         token_response = await oauth_client.fetch_token(
             'https://oauth2.googleapis.com/token',
             code=request.query_params.get('code'),
             code_verifier=code_verifier
         )
         
-        # Use AsyncClient for the JWKS request
         async with httpx.AsyncClient() as client:
             jwks_response = await client.get('https://www.googleapis.com/oauth2/v3/certs')
             jwk_set = JsonWebKey.import_key_set(jwks_response.json())
@@ -309,22 +327,39 @@ async def google_oauth_callback(
         return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=google_email_not_verified&email={google_email or ''}")
 
     user = (await db_session.execute(select(User).filter_by(email=google_email))).scalars().first()
+    
+    # Mặc định là đăng nhập thành công
     status_param = "google_signin_success"
 
     if not user:
+        # User mới, tạo tài khoản và đặt status để chuyển hướng đến trang hoàn tất hồ sơ
         random_pw = generate_random_password(12)
         user = User(
-            email=google_email, password_hash=hash_password(random_pw), google_id=user_claims.get("sub"),
-            user_name=user_claims.get("name"), is_confirmed_by_email=True, provider='google'
+            email=google_email, 
+            password_hash=hash_password(random_pw), 
+            google_id=user_claims.get("sub"),
+            user_name=user_claims.get("name"), 
+            is_confirmed_by_email=True, # Email từ Google được coi là đã xác thực
+            provider='google',
+            timezone='Etc/UTC' # Sẽ được cập nhật ở bước sau
         )
         db_session.add(user)
-        status_param = "google_signup_success_check_email"
+        status_param = "google_signup_success_new_user" # Status mới cho người dùng mới
         await dispatch_send_google_welcome_email(google_email, user.user_name, random_pw, background_tasks)
+        
+        # --- THÊM VÀO ĐỂ SỬA LỖI ---
+        # Đẩy session vào DB để user mới nhận được ID trước khi tạo LoginHistory
+        await db_session.flush()
+        await db_session.refresh(user)
+        # ---------------------------
+        
     elif not user.google_id:
+        # User đã tồn tại với email/password, liên kết tài khoản Google
         user.google_id = user_claims.get("sub")
         user.user_name = user_claims.get("name") or user.user_name
         status_param = "google_link_success"
 
+    # Ghi lại lịch sử đăng nhập
     user.last_activity_at = datetime.now(dt_timezone.utc)
     user_agent_string = request.headers.get("user-agent")
     device_os_info = parse(user_agent_string).os.family if user_agent_string else None
@@ -339,7 +374,17 @@ async def google_oauth_callback(
     await db_session.commit()
     await db_session.refresh(user)
     
+    # Tạo access token
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "provider": "google"})
     
-    response = RedirectResponse(url=f"{FRONTEND_BASE_URL}/dashboard.html?token={access_token}&status={status_param}&email={user.email}")
+    # --- LOGIC CHUYỂN HƯỚNG MỚI ---
+    # Nếu là người dùng mới, chuyển đến trang hoàn tất hồ sơ
+    if status_param == "google_signup_success_new_user":
+        logger.info(f"New Google user {user.email}. Redirecting to complete profile page.")
+        redirect_url = f"{FRONTEND_BASE_URL}/complete-profile.html?token={access_token}"
+    else:
+        # Nếu là người dùng cũ, vào thẳng dashboard
+        redirect_url = f"{FRONTEND_BASE_URL}/dashboard.html?token={access_token}&status={status_param}&email={user.email}"
+    
+    response = RedirectResponse(url=redirect_url)
     return response

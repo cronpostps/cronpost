@@ -57,7 +57,8 @@ class UserProfileResponse(BaseModel):
     trust_verifier_email: Optional[str] = None
     pin_code_question: Optional[str] = None
     rating_points: Optional[RatingPointsEnum] = None
-
+    has_pin: bool 
+    
     class Config:
         from_attributes = True
 
@@ -147,7 +148,8 @@ async def read_users_me(
         "checkin_on_signin": current_user.checkin_on_signin,
         "trust_verifier_email": current_user.trust_verifier_email,
         "pin_code_question": current_user.pin_code_question,
-        "rating_points": user_rating    
+        "rating_points": user_rating,
+        "has_pin": True if current_user.pin_code else False
     }
     
     return UserProfileResponse(**response_data)

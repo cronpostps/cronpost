@@ -1,7 +1,5 @@
 # backend/app/routers/user_profile_router.py
-# Version: 1.8.2
-# Changelog:
-# - Fixed NameError by importing BackgroundTasks from fastapi.
+# Version: 2.0.1 (Add User SMTP connection testing)
 
 import logging
 from typing import Optional, List
@@ -10,16 +8,16 @@ import secrets
 import pytz
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Response
 from pydantic import BaseModel, EmailStr, Field, constr, IPvAnyAddress
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from ..db.database import get_db_session
-from ..db.models import User, UserReview, RatingPointsEnum, LoginHistory
-from ..core.security import get_current_active_user
+from ..db.models import User, UserReview, RatingPointsEnum, LoginHistory, UserSmtpSettings
+from ..core.security import get_current_active_user, encrypt_data
 from ..routers.auth_router import hash_password, verify_password
-from ..services.email_service import send_email_async
+from ..services.email_service import send_email_async, test_smtp_connection
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -32,10 +30,12 @@ class ProfileUpdateRequest(BaseModel):
     user_name: str = Field(..., min_length=1, max_length=50)
     timezone: str
     trust_verifier_email: Optional[EmailStr] = None
+    pin_code: Optional[constr(pattern=r"^\d{4}$")] = None
 
 class SecurityOptionsUpdateRequest(BaseModel):
     use_pin_for_all_actions: bool
     checkin_on_signin: bool
+    pin_code: Optional[constr(pattern=r"^\d{4}$")] = None
 
 class PasswordChangeRequest(BaseModel):
     current_password: str
@@ -49,6 +49,9 @@ class PinChangeRequest(BaseModel):
 class PinRecoveryRequest(BaseModel):
     recovery_code: str
     new_pin: constr(pattern=r"^\d{4}$")
+
+class PinVerificationRequest(BaseModel):
+    pin_code: constr(pattern=r"^\d{4}$")
 
 class ReviewRequest(BaseModel):
     rating_points: RatingPointsEnum
@@ -75,6 +78,26 @@ class LoginHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# User SMTP Settings Models
+class SmtpTestResponse(BaseModel):
+    success: bool
+    message: str
+
+class UserSmtpSettingsResponse(BaseModel):
+    smtp_server: str
+    smtp_port: int
+    smtp_sender_email: EmailStr
+    is_active: bool
+
+    class Config:
+        from_attributes = True # orm_mode for Pydantic v1
+
+class UserSmtpSettingsUpdate(BaseModel):
+    smtp_server: str
+    smtp_port: int
+    smtp_sender_email: EmailStr
+    smtp_password: str
+
 # --- Endpoints ---
 # ... (Các endpoint khác giữ nguyên)
 
@@ -86,8 +109,26 @@ async def update_user_profile(profile_data: ProfileUpdateRequest, current_user: 
 
 @router.put("/security-options", response_model=MessageResponse, summary="Update user's security toggles")
 async def update_security_options(options_data: SecurityOptionsUpdateRequest, current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db_session)):
-    current_user.use_pin_for_all_actions = options_data.use_pin_for_all_actions; current_user.checkin_on_signin = options_data.checkin_on_signin
-    await db.commit(); return {"message": "Security options updated successfully."}
+    # --- THÊM LOGIC KIỂM TRA BẢO MẬT ---
+    if (options_data.use_pin_for_all_actions or options_data.checkin_on_signin) and not current_user.pin_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You must create a PIN before enabling 'Require PIN' or 'Automatic Check-in'."
+        )
+    # --- KẾT THÚC CẬP NHẬT ---
+    # Nếu user đã có PIN, mọi thay đổi trong mục này đều cần xác thực lại bằng PIN
+    if current_user.pin_code:
+        if not options_data.pin_code or not verify_password(options_data.pin_code, current_user.pin_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Incorrect PIN."
+            )
+    # --- KẾT THÚC LOGIC MỚI ---
+
+    current_user.use_pin_for_all_actions = options_data.use_pin_for_all_actions
+    current_user.checkin_on_signin = options_data.checkin_on_signin
+    await db.commit()
+    return {"message": "Security options updated successfully."}
 
 @router.post("/change-password", response_model=MessageResponse, summary="Change user's password")
 async def change_user_password(password_data: PasswordChangeRequest, current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db_session)):
@@ -110,6 +151,12 @@ async def change_user_pin(
 
     # Trường hợp 2: User chưa có PIN, đặt PIN lần đầu
     else:
+        if pin_data.current_pin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current PIN must be empty when setting a PIN for the first time."
+            )
+        
         raw_recovery_code = secrets.token_urlsafe(22)
         current_user.pin_recovery_code_hash = hash_password(raw_recovery_code)
         current_user.pin_recovery_code_used = False
@@ -143,6 +190,42 @@ async def recover_user_pin(recovery_data: PinRecoveryRequest, current_user: User
     if not verify_password(recovery_data.recovery_code, current_user.pin_recovery_code_hash): raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid recovery code.")
     current_user.pin_code = hash_password(recovery_data.new_pin); current_user.pin_recovery_code_used = True
     await db.commit(); return {"message": "PIN successfully recovered and updated."}
+
+@router.delete("/pin", response_model=MessageResponse, summary="Remove user's PIN and related data")
+async def remove_user_pin(
+    pin_data: PinVerificationRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Verifies the user's current PIN and removes it along with all related
+    settings and recovery data.
+    """
+    # 1. Kiểm tra xem user có PIN để xóa không
+    if not current_user.pin_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No PIN has been set for this account."
+        )
+
+    # 2. Xác thực mã PIN người dùng nhập
+    if not verify_password(pin_data.pin_code, current_user.pin_code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect PIN."
+        )
+
+    # 3. Nếu PIN đúng, tiến hành xóa PIN và các dữ liệu liên quan
+    current_user.pin_code = None
+    current_user.pin_code_question = None
+    current_user.pin_recovery_code_hash = None
+    current_user.pin_recovery_code_used = False
+    current_user.use_pin_for_all_actions = False
+    
+    current_user.updated_at = datetime.now(pytz.UTC)
+
+    await db.commit()   
+    return {"message": "PIN has been successfully removed."}
 
 # Sửa response_model
 @router.put("/review", response_model=UserReviewResponse, summary="Create or update user review")
@@ -178,3 +261,92 @@ async def get_access_history(
     stmt = (select(LoginHistory).where(LoginHistory.user_id == current_user.id).order_by(LoginHistory.login_time.desc()).limit(10))
     result = await db.execute(stmt)
     return result.scalars().all()
+
+# --- START: SMTP SETTINGS ENDPOINTS ---
+
+@router.get("/smtp-settings", response_model=UserSmtpSettingsResponse, summary="Get user's custom SMTP settings")
+async def get_smtp_settings(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Retrieve the current user's saved SMTP settings.
+    """
+    stmt = select(UserSmtpSettings).where(UserSmtpSettings.user_id == current_user.id)
+    result = await db.execute(stmt)
+    smtp_settings = result.scalars().first()
+    
+    if not smtp_settings:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SMTP settings not found.")
+    
+    return smtp_settings
+
+@router.put("/smtp-settings", response_model=SmtpTestResponse, summary="Create or Update user's SMTP settings")
+async def update_smtp_settings(
+    settings_data: UserSmtpSettingsUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Create or update the user's SMTP settings.
+    It performs a connection test before saving the credentials.
+    """
+    success, message = await test_smtp_connection(
+        server=settings_data.smtp_server,
+        port=settings_data.smtp_port,
+        username=settings_data.smtp_sender_email,
+        password=settings_data.smtp_password
+    )
+    
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        
+    encrypted_password = encrypt_data(settings_data.smtp_password)
+    
+    stmt = select(UserSmtpSettings).where(UserSmtpSettings.user_id == current_user.id)
+    result = await db.execute(stmt)
+    db_settings = result.scalars().first()
+    
+    if db_settings:
+        db_settings.smtp_server = settings_data.smtp_server
+        db_settings.smtp_port = settings_data.smtp_port
+        db_settings.smtp_sender_email = settings_data.smtp_sender_email
+        db_settings.smtp_password_encrypted = encrypted_password
+        db_settings.is_active = True
+        db_settings.last_test_successful = True
+    else:
+        db_settings = UserSmtpSettings(
+            user_id=current_user.id,
+            smtp_server=settings_data.smtp_server,
+            smtp_port=settings_data.smtp_port,
+            smtp_sender_email=settings_data.smtp_sender_email,
+            smtp_password_encrypted=encrypted_password,
+            is_active=True,
+            last_test_successful=True
+        )
+        db.add(db_settings)
+        
+    await db.commit()
+    
+    return SmtpTestResponse(success=True, message="SMTP settings saved and connection successful!")
+
+
+@router.delete("/smtp-settings", status_code=status.HTTP_204_NO_CONTENT, summary="Delete user's SMTP settings")
+async def delete_smtp_settings(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Delete the current user's SMTP settings.
+    """
+    stmt = select(UserSmtpSettings).where(UserSmtpSettings.user_id == current_user.id)
+    result = await db.execute(stmt)
+    db_settings = result.scalars().first()
+    
+    if db_settings:
+        await db.delete(db_settings)
+        await db.commit()
+        
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# --- END: SMTP SETTINGS ENDPOINTS ---

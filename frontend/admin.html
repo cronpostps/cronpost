@@ -1,0 +1,167 @@
+<!-- /frontend/admin.html -->
+<!-- version 1.2-->
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+    <title>Admin Dashboard - CronPost</title>
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Custom styles for sortable table headers -->
+    <style>
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        .sortable-header:hover {
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body class="theme-dark main-application-page">
+    <!-- Modal yêu cầu nhập PIN khi tải trang -->
+    <div class="modal fade" id="pinPromptModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="pinPromptModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pinPromptModalLabel">Admin Access Required</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Please enter your Admin PIN to access this page.</p>
+                    <form id="pinPromptForm">
+                        <div class="mb-3">
+                            <label for="adminPinInput" class="form-label">Admin PIN</label>
+                            <input type="password" class="form-control" id="adminPinInput" maxlength="4" pattern="\d{4}" required autocomplete="off">
+                        </div>
+                        <div id="pinPromptError" class="alert alert-danger" style="display: none;"></div>
+                        <button type="submit" class="btn btn-primary w-100">Authenticate</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main id="main-content" class="container mt-4" style="display: none;"> <!-- Ẩn nội dung chính ban đầu -->
+                <!--#include virtual="/_header-dashboard.html" -->
+        <div class="dashboard-header mb-4">
+            <h2>Admin Dashboard</h2>
+            <p>System management and monitoring.</p>
+        </div>
+        
+        <div id="adminStatusMessage" class="alert" style="display: none;"></div>
+
+        <!-- Giao diện Tab cho các chức năng -->
+        <ul class="nav nav-tabs" id="adminTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-panel" type="button" role="tab" aria-controls="settings-panel" aria-selected="true">System Settings</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab" aria-controls="users-panel" aria-selected="false">User Management</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <!-- UPDATED: Changed from Revenue to Reports -->
+                <button class="nav-link" id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-panel" type="button" role="tab" aria-controls="reports-panel" aria-selected="false">Reports</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="adminTabContent">
+            <!-- Tab 1: System Settings -->
+            <div class="tab-pane fade show active" id="settings-panel" role="tabpanel" aria-labelledby="settings-tab">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        Manage System-wide Parameters
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Setting Key</th>
+                                        <th>Value</th>
+                                        <th>Description</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="settingsTableBody">
+                                    <!-- System settings will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: User Management -->
+            <div class="tab-pane fade" id="users-panel" role="tabpanel" aria-labelledby="users-tab">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        Manage Users
+                    </div>
+                    <div class="card-body">
+                        <!-- --- ADDED: SEARCH FORM BLOCK --- -->
+                        <div class="row mb-3">
+                            <div class="col-md-8 col-lg-6">
+                                <form id="userSearchForm" class="d-flex" onsubmit="return false;"> <!-- onsubmit to prevent page reload -->
+                                    <input class="form-control me-2" type="search" id="userSearchInput" placeholder="Search by Email or User Name..." aria-label="Search">
+                                    <button class="btn btn-primary" type="submit" id="userSearchButton">Search</button>
+                                    <button class="btn btn-secondary ms-2" type="button" id="userSearchReset">Reset</button>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- --- END SEARCH FORM BLOCK --- -->
+
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Email</th>
+                                        <th>User Name</th>
+                                        <!-- UPDATED: Added sortable header class and data attributes -->
+                                        <th class="sortable-header" data-sort-key="membership_type">Type &#x2195;</th>
+                                        <th>Status</th>
+                                        <!-- ADDED: New sortable columns -->
+                                        <th class="sortable-header" data-sort-key="last_activity_at">Last Activity &#x2195;</th>
+                                        <th class="sortable-header" data-sort-key="created_at">Registered At &#x2195;</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <!-- User list will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <span id="userCountInfo" class="text-muted"></span>
+                            <nav aria-label="User pagination">
+                                <ul class="pagination mb-0" id="userPagination">
+                                <!-- Pagination links will be generated by JavaScript -->
+                                </ul>
+                            </nav>
+                        </div>  
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Reports (Previously Revenue) -->
+            <div class="tab-pane fade" id="reports-panel" role="tabpanel" aria-labelledby="reports-tab">
+                <div class="card mt-3">
+                    <div class="card-body">
+                        <!-- UPDATED: Placeholder text -->
+                        <p>Reporting features (including Revenue reports) are under development.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+<!--#include virtual="/_footer.html" -->
+
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/header.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>

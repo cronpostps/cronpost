@@ -1,11 +1,12 @@
 # backend/app/core/security.py
-# Version: 1.3 (Added admin user dependency)
+# Version 2.0 (Added Fernet encryption/decryption)
 
 import os
 import logging
 from typing import Optional, Annotated
 import uuid
 from pydantic import BaseModel, EmailStr
+from cryptography.fernet import Fernet
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -19,16 +20,45 @@ from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 
+# --- CONFIGURATION ---
 APP_JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
 APP_JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY") # Đọc khóa mã hóa từ .env
 
+# --- INITIALIZATION ---
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/signin")
+
+# Khởi tạo Fernet để mã hóa, báo lỗi nếu không tìm thấy key
+if not ENCRYPTION_KEY:
+    logger.critical("CRITICAL: ENCRYPTION_KEY is not set in the environment. SMTP password encryption will fail.")
+    fernet = None
+else:
+    fernet = Fernet(ENCRYPTION_KEY.encode())
 
 class TokenData(BaseModel):
     sub: Optional[str] = None
     email: Optional[EmailStr] = None
     provider: Optional[str] = None
 
+# --- CÁC HÀM MÃ HÓA / GIẢI MÃ MỚI ---
+def encrypt_data(data: str) -> str:
+    """Mã hóa một chuỗi và trả về chuỗi đã mã hóa."""
+    if not fernet:
+        raise ValueError("Encryption service is not available due to missing ENCRYPTION_KEY.")
+    if not isinstance(data, str):
+        raise TypeError("Data to be encrypted must be a string.")
+    return fernet.encrypt(data.encode()).decode()
+
+def decrypt_data(encrypted_data: str) -> str:
+    """Giải mã một chuỗi và trả về chuỗi gốc."""
+    if not fernet:
+        raise ValueError("Decryption service is not available due to missing ENCRYPTION_KEY.")
+    if not isinstance(encrypted_data, str):
+        raise TypeError("Encrypted data must be a string.")
+    return fernet.decrypt(encrypted_data.encode()).decode()
+
+
+# --- CÁC DEPENDENCY HIỆN CÓ ---
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     db: AsyncSession = Depends(get_db_session)
@@ -57,10 +87,14 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: Annotated[User, Depends(get_current_user)]
 ) -> User:
-    # ... (logic get_current_active_user giữ nguyên)
+    # Logic to check if user is active (e.g., email confirmed)
+    # if not current_user.is_confirmed_by_email:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_403_FORBIDDEN, 
+    #         detail="Email not confirmed"
+    #     )
     return current_user
 
-# --- HÀM MỚI ĐỂ XÁC THỰC ADMIN ---
 async def get_current_admin_user(
     current_user: Annotated[User, Depends(get_current_active_user)]
 ) -> User:
