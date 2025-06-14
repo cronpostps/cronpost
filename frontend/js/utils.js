@@ -1,20 +1,55 @@
 // frontend/js/utils.js
-// Version: 1.0
-// Mô tả: Các hàm tiện ích dùng chung cho frontend
+// Version: 1.5
+// - Removed global 401 handling from fetchWithAuth to allow local error processing.
+// - executeActionWithPinVerification now centrally handles the PIN retry loop.
+// - executeActionWithPinVerification now automatically redirects to the dashboard on account lockout.
 
-console.log("--- utils.js SCRIPT STARTED (v1.0) ---");
+console.log("--- utils.js SCRIPT STARTED (v1.5) ---");
+
+// === API CALL HELPER FUNCTION ===
 
 /**
- * Hiển thị lỗi/thành công cho một trường input cụ thể.
- * @param {HTMLElement} errorElement - Element div để hiển thị thông báo.
- * @param {string} message - Nội dung thông báo.
- * @param {string} type - 'error' hoặc 'success'. Default là 'error'.
+ * A wrapper for the native fetch function that automatically adds the authentication token.
+ * It no longer handles 401 errors globally, allowing the calling function to manage them.
+ * @param {string} url - The URL to fetch.
+ * @param {object} [options={}] - The options object for the fetch call.
+ * @returns {Promise<Response>} The fetch Response object.
+ */
+async function fetchWithAuth(url, options = {}) {
+    const accessToken = localStorage.getItem('accessToken');
+
+    // Set default headers
+    const defaultHeaders = {
+        'Content-Type': 'application/json',
+        ...options.headers, // Allow overriding default headers
+    };
+
+    // Add authorization header if token exists
+    if (accessToken) {
+        defaultHeaders['Authorization'] = `Bearer ${accessToken}`;
+    }
+
+    // Create the final options object
+    const finalOptions = {
+        ...options,
+        headers: defaultHeaders,
+    };
+
+    // Perform the fetch call and return the response directly
+    const response = await fetch(url, finalOptions);
+    return response;
+}
+
+
+// --- FORM & UI HELPER FUNCTIONS ---
+
+/**
+ * Displays an error/success message for a specific input field.
  */
 function displayFieldError(errorElement, message, type = 'error') {
     if (errorElement) {
         errorElement.textContent = message;
         errorElement.style.display = message ? 'block' : 'none';
-        // Giả định input nằm ngay trước div lỗi và có class form-control
         const inputElement = errorElement.previousElementSibling; 
         if (inputElement && inputElement.tagName === 'INPUT' && inputElement.classList.contains('form-control')) {
             inputElement.classList.remove('is-invalid', 'is-valid');
@@ -22,22 +57,18 @@ function displayFieldError(errorElement, message, type = 'error') {
                 inputElement.classList.add(type === 'error' ? 'is-invalid' : 'is-valid');
             }
         }
-        // Thêm class cho chính errorElement nếu muốn
         errorElement.className = message ? (type === 'error' ? 'invalid-feedback' : 'valid-feedback') : 'invalid-feedback';
     }
 }
 
 /**
- * Hiển thị thông báo chung của form (thường là alert).
- * @param {HTMLElement} alertElement - Element div alert để hiển thị thông báo.
- * @param {string} message - Nội dung thông báo.
- * @param {boolean} isSuccess - True nếu là thông báo thành công.
+ * Displays a general form message (usually an alert).
  */
 function displayGeneralFormMessage(alertElement, message, isSuccess = false) {
     if (alertElement) {
         alertElement.textContent = message;
         alertElement.style.display = message ? 'block' : 'none';
-        alertElement.className = 'alert mt-3'; // Reset các class alert cũ
+        alertElement.className = 'alert mt-3'; // Reset old alert classes
         if (message) {
             alertElement.classList.add(isSuccess ? 'alert-success' : 'alert-danger');
         }
@@ -45,8 +76,7 @@ function displayGeneralFormMessage(alertElement, message, isSuccess = false) {
 }
 
 /**
- * Xóa tất cả các thông báo lỗi/thành công trên một form cụ thể.
- * Cần truyền vào các element của form đó.
+ * Clears all error/success messages on a specific form.
  */
 function clearFormMessagesAndValidation(formElements) {
     if (formElements.generalErrorDiv) {
@@ -60,29 +90,22 @@ function clearFormMessagesAndValidation(formElements) {
         displayFieldError(formElements.passwordErrorDiv, '');
         formElements.passwordInput.classList.remove('is-invalid', 'is-valid');
     }
-    if (formElements.confirmPasswordErrorDiv && formElements.confirmPasswordInput) { // Cho signup
+    if (formElements.confirmPasswordErrorDiv && formElements.confirmPasswordInput) {
         displayFieldError(formElements.confirmPasswordErrorDiv, '');
         formElements.confirmPasswordInput.classList.remove('is-invalid', 'is-valid');
     }
-    // Thêm cho các trường khác nếu cần
 }
 
 /**
- * Vô hiệu hóa/Kích hoạt các input và button chính trên form.
- * @param {HTMLFormElement} formElement - Form element.
- * @param {boolean} disable - True để vô hiệu hóa.
- * @param {string} [buttonTextWhileDisabled] - Optional text cho nút submit khi đang disabled.
+ * Disables/Enables inputs and the primary button on a form.
  */
 function toggleFormElementsDisabled(formElement, disable, buttonTextWhileDisabled = null) {
     if (!formElement) return;
-
     const submitButton = formElement.querySelector('button[type="submit"]');
-    const inputs = formElement.querySelectorAll('input:not([type="checkbox"]), select, textarea'); // Không disable checkbox
-
+    const inputs = formElement.querySelectorAll('input:not([type="checkbox"]), select, textarea');
     if (submitButton) {
         submitButton.disabled = disable;
         if (disable && buttonTextWhileDisabled) {
-            // Lưu text gốc nếu chưa có
             if (!submitButton.dataset.originalText) {
                 submitButton.dataset.originalText = submitButton.textContent;
             }
@@ -91,67 +114,39 @@ function toggleFormElementsDisabled(formElement, disable, buttonTextWhileDisable
             submitButton.textContent = submitButton.dataset.originalText;
         }
     }
-    inputs.forEach(input => {
-        input.disabled = disable;
-    });
-
-    // Cần xử lý riêng cho các nút khác như Google Sign-In nếu chúng nằm ngoài form
-    const googleBtn = document.getElementById('googleSignInBtn'); // Giả sử có ID này
+    inputs.forEach(input => { input.disabled = disable; });
+    const googleBtn = document.getElementById('googleSignInBtn');
     if (googleBtn) {
         googleBtn.disabled = disable;
     }
 }
 
-/**
- * Formats an ISO timestamp string into a human-readable string in a specific timezone.
- * @param {string} isoTimestamp - The ISO 8601 timestamp string from the backend.
- * @param {string} targetTimezone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
- * @returns {string} A formatted date-time string or 'N/A'.
- */
-function formatTimestampInZone(isoTimestamp, targetTimezone) {
-    if (!isoTimestamp) {
-        return 'N/A';
-    }
 
-    // Validate the targetTimezone to prevent errors
-    let validTimezone = 'UTC'; // Default to UTC
+// --- DATE & TIMEZONE HELPER FUNCTIONS ---
+
+function formatTimestampInZone(isoTimestamp, targetTimezone) {
+    if (!isoTimestamp) { return 'N/A'; }
+    let validTimezone = 'UTC';
     try {
-        // The 'timeZone' option in Intl.DateTimeFormat will throw an error for invalid timezones.
-        // We can use this to validate.
         new Intl.DateTimeFormat(undefined, { timeZone: targetTimezone });
         validTimezone = targetTimezone;
     } catch (e) {
         console.warn(`Invalid or unsupported timezone provided: "${targetTimezone}". Falling back to UTC.`);
     }
-
     try {
         const date = new Date(isoTimestamp);
-        
-        // Use Intl.DateTimeFormat for robust, localized formatting
-        const formatter = new Intl.DateTimeFormat('en-GB', { // en-GB for dd/mm/yyyy format
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false, // Use 24-hour format
-            timeZone: validTimezone
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false, timeZone: validTimezone
         });
-
         return formatter.format(date);
     } catch (error) {
         console.error(`Error formatting date for timezone ${validTimezone}:`, error);
-        // Fallback for safety
         return new Date(isoTimestamp).toLocaleString();
     }
 }
 
-/**
- * Calculates the GMT offset in minutes for a given IANA timezone.
- * @param {string} ianaTimeZone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
- * @returns {number} The offset from GMT in minutes.
- */
 function getIanaTimezoneOffsetMinutes(ianaTimeZone) {
     try {
         const date = new Date();
@@ -164,11 +159,6 @@ function getIanaTimezoneOffsetMinutes(ianaTimeZone) {
     }
 }
 
-/**
- * Formats a minute offset into a [GMT ±HH:mm] string.
- * @param {number} offsetMinutes - The offset in minutes.
- * @returns {string} The formatted GMT string.
- */
 function formatGmtOffset(offsetMinutes) {
     const sign = offsetMinutes >= 0 ? '+' : '-';
     const absOffset = Math.abs(offsetMinutes);
@@ -178,69 +168,90 @@ function formatGmtOffset(offsetMinutes) {
 }
 
 /**
- * Formats an ISO timestamp string into a human-readable string in a specific timezone.
- * @param {string} isoTimestamp - The ISO 8601 timestamp string from the backend.
- * @param {string} targetTimezone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
- * @returns {string} A formatted date-time string or 'N/A'.
+ * Formats a total number of seconds into an hh:mm:ss string.
+ * @param {number} totalSeconds - The total seconds to format.
+ * @returns {string} The formatted time string, e.g., "00:15:00".
  */
-function formatTimestampInZone(isoTimestamp, targetTimezone) {
-    if (!isoTimestamp) {
-        return 'N/A';
+function formatSecondsToHms(totalSeconds) {
+    if (isNaN(totalSeconds) || totalSeconds < 0) {
+        return "00:00:00";
     }
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
 
-    let validTimezone = 'UTC';
-    try {
-        new Intl.DateTimeFormat(undefined, { timeZone: targetTimezone });
-        validTimezone = targetTimezone;
-    } catch (e) {
-        console.warn(`Invalid or unsupported timezone provided: "${targetTimezone}". Falling back to UTC.`);
-    }
+    const paddedHours = String(hours).padStart(2, '0');
+    const paddedMinutes = String(minutes).padStart(2, '0');
+    const paddedSeconds = String(seconds).padStart(2, '0');
 
-    try {
-        const date = new Date(isoTimestamp);
-        const formatter = new Intl.DateTimeFormat('en-GB', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false,
-            timeZone: validTimezone
-        });
-        return formatter.format(date);
-    } catch (error) {
-        console.error(`Error formatting date for timezone ${validTimezone}:`, error);
-        return new Date(isoTimestamp).toLocaleString();
-    }
+    return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
 }
 
-// /**
-//  * Calculates the GMT offset in minutes for a given IANA timezone.
-//  * @param {string} ianaTimeZone - The IANA timezone string (e.g., 'Asia/Ho_Chi_Minh').
-//  * @returns {number} The offset from GMT in minutes.
-//  */
-// function getIanaTimezoneOffsetMinutes(ianaTimeZone) {
-//     try {
-//         const date = new Date();
-//         const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
-//         const targetDate = new Date(date.toLocaleString('en-US', { timeZone: ianaTimeZone }));
-//         return (targetDate.getTime() - utcDate.getTime()) / (1000 * 60);
-//     } catch (e) {
-//         console.error(`Could not calculate offset for timezone: ${ianaTimeZone}`, e);
-//         return 0; // Fallback to 0 offset on error
-//     }
-// }
 
-// /**
-//  * Formats a minute offset into a [GMT ±HH:mm] string.
-//  * @param {number} offsetMinutes - The offset in minutes.
-//  * @returns {string} The formatted GMT string.
-//  */
-// function formatGmtOffset(offsetMinutes) {
-//     const sign = offsetMinutes >= 0 ? '+' : '-';
-//     const absOffset = Math.abs(offsetMinutes);
-//     const hours = String(Math.floor(absOffset / 60)).padStart(2, '0');
-//     const minutes = String(absOffset % 60).padStart(2, '0');
-//     return `GMT ${sign}${hours}:${minutes}`;
-// }
+// === CENTRALIZED PIN VERIFICATION FUNCTION ===
+
+/**
+ * Executes an API action that requires PIN verification, handling the retry loop and lockout redirect centrally.
+ * @param {string} promptText - The text to display in the PIN modal prompt.
+ * @param {Function} apiCallback - An async function that takes the entered PIN and performs the fetch request. It must return the raw response object.
+ * @returns {Promise<any>} A promise that resolves with the successful JSON result of the apiCallback.
+ * @throws Will re-throw an error if the user cancels the action.
+ */
+async function executeActionWithPinVerification(promptText, apiCallback) {
+    let isActionSuccessful = false;
+    let lastErrorMessage = null;
+
+    do {
+        try {
+            // 1. Request PIN from user via modal
+            const enteredPin = await window.requestPinVerification(promptText, lastErrorMessage);
+            
+            // 2. Execute the provided API callback with the entered PIN
+            const response = await apiCallback(enteredPin);
+
+            // 3. If the response is not OK, parse the error and throw it to be caught below
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw errorData;
+            }
+            
+            // 4. If successful, mark as such and return the JSON data
+            isActionSuccessful = true;
+            return await response.json();
+
+        } catch (error) {
+            // Case 1: User closed the PIN modal (e.g., pressed Esc or clicked outside)
+            if (error instanceof Error && error.message.includes('cancelled')) {
+                // This is a "clean" exit. Re-throw it so the calling page knows the action was aborted.
+                throw error; 
+            }
+            
+            // The error is likely a JSON object from the backend
+            const errorDetail = error.detail || error;
+
+            // Case 2: The backend returned a specific "account_locked" error.
+            if (typeof errorDetail === 'object' && errorDetail.type === 'account_locked') {
+                const timeStr = formatSecondsToHms(errorDetail.remaining_seconds);
+                const finalMessage = `${errorDetail.message} You will be redirected to the dashboard. Please try again in ${timeStr}.`;
+                
+                // Alert the user with the detailed message.
+                alert(finalMessage);
+                
+                // Redirect to the dashboard.
+                window.location.href = '/dashboard';
+                
+                // Return a promise that never resolves to halt further script execution.
+                // This prevents any `.then()` or `await` in the calling code from proceeding, as the page is now redirecting.
+                return new Promise(() => {}); 
+            }
+
+            // Case 3: Other retry-able errors (e.g., invalid PIN).
+            // Prepare the error message for the next PIN modal prompt.
+            if (typeof errorDetail === 'string') {
+                lastErrorMessage = errorDetail;
+            } else {
+                lastErrorMessage = errorDetail.message || 'An unknown error occurred.';
+            }
+        }
+    } while (!isActionSuccessful);
+}

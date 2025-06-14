@@ -158,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             alert(successMessage);
                         }
-                        setTimeout(() => { window.location.href = '/dashboard.html'; }, 1000);
+                        setTimeout(() => { window.location.href = '/dashboard'; }, 1000);
                     } else {
                         const errorMsg = data?.detail ? String(data.detail) : 'Sign in successful, but no token received.';
                         if (typeof displayGeneralFormMessage === "function") displayGeneralFormMessage(generalFormErrorDiv, errorMsg);

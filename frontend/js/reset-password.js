@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     resetPasswordForm.reset(); // Clear form
                     // Tự động chuyển hướng về trang signin sau 3 giây
                     setTimeout(() => {
-                        window.location.href = '/signin.html?status=password_reset_success';
+                        window.location.href = '/signin?status=password_reset_success';
                     }, 3000);
                 } else {
                     const errorMsg = data?.detail ? String(data.detail) : 'An unknown error occurred. Please try again.';

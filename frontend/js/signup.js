@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Redirect to signin page after a delay
                 setTimeout(() => {
-                    window.location.href = `/signin.html?status=email_verification_pending&email=${encodeURIComponent(payload.email)}`;
+                    window.location.href = `/signin?status=email_verification_pending&email=${encodeURIComponent(payload.email)}`;
                 }, 5000);
 
             } catch (error) {

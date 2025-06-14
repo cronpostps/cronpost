@@ -30,7 +30,6 @@ from .routers import (
     signin_router, 
     password_reset_router, 
     user_router,
-    user_profile_router, 
     message_router, 
     messaging_router,
     user_actions_router,
@@ -69,9 +68,9 @@ app = FastAPI(
 # 0. Proxy Headers Middleware (BẮT BUỘC đặt trước Rate Limiting)
 TRUSTED_HOSTS_STR = os.environ.get("TRUSTED_HOSTS", "127.0.0.1")
 TRUSTED_HOSTS_LIST = [h.strip() for h in TRUSTED_HOSTS_STR.split(',')]
-# --- THÊM DÒNG LOG NÀY ---
+
 logger.info(f"PROXY MIDDLEWARE INITIALIZED. TRUSTED HOSTS: {TRUSTED_HOSTS_LIST}")
-# -------------------------
+
 app.add_middleware(
     ProxyHeadersMiddleware,
     trusted_hosts=TRUSTED_HOSTS_LIST
@@ -123,7 +122,6 @@ app.include_router(auth_router.router, prefix="/auth")
 app.include_router(signin_router.router, prefix="/auth")
 app.include_router(password_reset_router.router, prefix="/auth")
 app.include_router(user_router.router, prefix="/users")
-app.include_router(user_profile_router.router, prefix="/users")
 app.include_router(message_router.router, prefix="/messages")
 app.include_router(messaging_router.router, prefix="/messaging")
 app.include_router(user_actions_router.router, prefix="/users")

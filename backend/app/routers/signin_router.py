@@ -1,5 +1,5 @@
 # backend/app/routers/signin_router.py
-# Version: 1.3 (Added IM check on sign-in to adjust account_status to INS if no IM and status is ANS_...)
+# Version: 1.3
 
 import os
 import logging
@@ -59,12 +59,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 class UserSignInRequest(BaseModel):
     email: EmailStr
     password: str
-    # captchaToken: Optional[str] = None # Bỏ qua captcha ở signin_router hiện tại, vì nó đã có ở auth_router cho signup
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    # Thêm message để frontend có thể hiển thị nếu trạng thái bị thay đổi
     message: Optional[str] = None
     account_status_after_signin: Optional[UserAccountStatusEnum] = None
 
@@ -110,7 +108,6 @@ async def signin_user_endpoint(
 
     if not verify_password(form_data.password, user.password_hash):
         logger.warning(f"Signin failed for {form_data.email}: Incorrect password.")
-        # Ghi log đăng nhập thất bại (LoginHistory)
         login_entry_failed = LoginHistory(
             user_id=user.id,
             ip_address=str(request.client.host) if request.client else None,
@@ -196,8 +193,8 @@ async def signin_user_endpoint(
     
     try:
         await db_session.commit()
-        await db_session.refresh(user) # Refresh user để lấy trạng thái mới nhất nếu có thay đổi
-        if user.configuration: # Refresh cả configuration nếu nó đã được load và có thể đã thay đổi
+        await db_session.refresh(user)
+        if user.configuration:
             await db_session.refresh(user.configuration)
     except Exception as e:
         await db_session.rollback()
@@ -211,6 +208,6 @@ async def signin_user_endpoint(
     return TokenResponse(
         access_token=access_token, 
         token_type="bearer",
-        message=status_adjusted_message, # Trả về thông báo nếu trạng thái bị thay đổi
-        account_status_after_signin=user.account_status # Trả về trạng thái cuối cùng
+        message=status_adjusted_message,
+        account_status_after_signin=user.account_status
     )

@@ -1,6 +1,6 @@
 // /frontend/js/header.js
 // version 1.0
-// Handles all logic for the shared _header-dashboard.html partial.
+// Handles all logic for the shared _header-dashboard partial.
 
 console.log("--- header.js SCRIPT STARTED (v1.0) ---");
 
@@ -82,7 +82,7 @@ function initializeSharedHeader() {
             
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            window.location.href = '/signin.html?status=signout_success';
+            window.location.href = '/signin?status=signout_success';
         });
     }
 

@@ -1,9 +1,8 @@
 # /backend/app/db/models.py
-# Version: 2.9.0
+# Version: 2.10.0
 # Changelog:
-# - Added UserSmtpSettings model to support user-defined SMTP.
-# - Added SendingMethodEnum.
-# - Updated User, Message, SimpleCronMessage, and SendingHistory models to reflect DB changes.
+# - Added EmailCheckinSettings and PinAttempt models for v2.4 features.
+# - Re-formatted for readability.
 
 import enum
 import uuid
@@ -11,7 +10,7 @@ from datetime import datetime, timezone as dt_timezone
 
 from sqlalchemy import (
     Column, Text, Boolean, DateTime, Integer, ForeignKey,
-    Enum as SQLAlchemyEnum, Time, Date, String, BigInteger, PrimaryKeyConstraint
+    Enum as SQLAlchemyEnum, Time, Date, BigInteger
 )
 from sqlalchemy.dialects.postgresql import UUID, INET
 from sqlalchemy.orm import relationship
@@ -35,12 +34,7 @@ class OttOptInStatusEnum(str, enum.Enum): pending_verification='pending_verifica
 class RatingPointsEnum(str, enum.Enum): _1='_1'; _2='_2'; _3='_3'; _4='_4'; _5='_5'
 class SCMScheduleTypeEnum(str, enum.Enum): loop='loop'; unloop='unloop'
 class SCMStatusEnum(str, enum.Enum): active='active'; inactive='inactive'; paused='paused'
-
-# NEW ENUM for v2.9.0
-class SendingMethodEnum(str, enum.Enum):
-    cronpost_email = 'cronpost_email'
-    in_app_messaging = 'in_app_messaging'
-    user_email = 'user_email'
+class SendingMethodEnum(str, enum.Enum): cronpost_email = 'cronpost_email'; in_app_messaging = 'in_app_messaging'; user_email = 'user_email'
 
 
 # --- Định nghĩa các Model Bảng ---
@@ -99,11 +93,11 @@ class User(Base):
     received_in_app_messages = relationship("InAppMessage", foreign_keys="[InAppMessage.receiver_id]", back_populates="receiver", cascade="all, delete-orphan")
     simple_cron_messages = relationship("SimpleCronMessage", back_populates="user", cascade="all, delete-orphan")
     user_blocks = relationship("UserBlock", foreign_keys="[UserBlock.blocker_user_id]", back_populates="blocker", cascade="all, delete-orphan")
-    # New Relationship for v2.9.0
     smtp_settings = relationship("UserSmtpSettings", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    email_checkin_settings = relationship("EmailCheckinSettings", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    pin_attempts = relationship("PinAttempt", back_populates="user", cascade="all, delete-orphan")
 
 
-# NEW MODEL for v2.9.0
 class UserSmtpSettings(Base):
     __tablename__ = 'user_smtp_settings'
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
@@ -116,8 +110,32 @@ class UserSmtpSettings(Base):
     last_test_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
-
+    
     user = relationship("User", back_populates="smtp_settings")
+
+
+class EmailCheckinSettings(Base):
+    __tablename__ = 'email_checkin_settings'
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    use_checkin_token_email = Column(Boolean, nullable=False, default=False)
+    checkin_token = Column(Text, unique=True)
+    checkin_token_expires_at = Column(DateTime(timezone=True))
+    send_additional_reminder = Column(Boolean, nullable=False, default=False)
+    additional_reminder_minutes = Column(Integer)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
+    user = relationship("User", back_populates="email_checkin_settings")
+
+
+class PinAttempt(Base):
+    __tablename__ = 'pin_attempts'
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    attempt_time = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    is_successful = Column(Boolean, nullable=False)
+
+    user = relationship("User", back_populates="pin_attempts")
 
 
 class EmailConfirmation(Base):
@@ -131,7 +149,9 @@ class EmailConfirmation(Base):
     confirmed_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    
     user = relationship("User", back_populates="email_confirmations")
+
 
 class PasswordResetToken(Base):
     __tablename__ = 'password_reset_tokens'
@@ -142,7 +162,9 @@ class PasswordResetToken(Base):
     is_used = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    
     user = relationship("User", back_populates="password_reset_tokens")
+
 
 class LoginHistory(Base):
     __tablename__ = 'login_history'
@@ -153,22 +175,30 @@ class LoginHistory(Base):
     user_agent = Column(Text)
     device_os = Column(Text)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     user = relationship("User", back_populates="login_history")
+
 
 class UserConfiguration(Base):
     __tablename__ = 'user_configurations'
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
     clc_type = Column(SQLAlchemyEnum(CLCTypeEnum, name='clc_type_enum', create_type=False), default=CLCTypeEnum.every_day, nullable=False)
-    clc_day_number_interval = Column(Integer); clc_day_of_week = Column(SQLAlchemyEnum(DayOfWeekEnum, name='day_of_week_enum', create_type=False))
-    clc_date_of_month = Column(Integer); clc_date_of_year = Column(Text); clc_specific_date = Column(Date)
+    clc_day_number_interval = Column(Integer)
+    clc_day_of_week = Column(SQLAlchemyEnum(DayOfWeekEnum, name='day_of_week_enum', create_type=False))
+    clc_date_of_month = Column(Integer)
+    clc_date_of_year = Column(Text)
+    clc_specific_date = Column(Date)
     clc_prompt_time = Column(Time, default='09:00:00', nullable=False)
     wct_duration_value = Column(Integer, default=1, nullable=False)
     wct_duration_unit = Column(SQLAlchemyEnum(WTCDurationUnitEnum, name='wct_duration_unit_enum', create_type=False), default=WTCDurationUnitEnum.hours, nullable=False)
     is_clc_enabled = Column(Boolean, default=False, nullable=False)
-    next_clc_prompt_at = Column(DateTime(timezone=True)); wct_active_ends_at = Column(DateTime(timezone=True))
+    next_clc_prompt_at = Column(DateTime(timezone=True))
+    wct_active_ends_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     user = relationship("User", back_populates="configuration")
+
 
 class UploadedFile(Base):
     __tablename__ = 'uploaded_files'
@@ -181,6 +211,7 @@ class UploadedFile(Base):
     storage_location = Column(Text, default='local', nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     user = relationship("User", back_populates="uploaded_files")
     messages_attached_to = relationship("Message", back_populates="attachment_file")
     in_app_messages_attached_to = relationship("InAppMessage", back_populates="attachment_file")
@@ -199,19 +230,28 @@ class Message(Base):
     overall_send_status = Column(SQLAlchemyEnum(MessageOverallStatusEnum, name='message_overall_status_enum', create_type=False), default=MessageOverallStatusEnum.pending, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     user = relationship("User", back_populates="messages")
     receivers = relationship("MessageReceiver", back_populates="message", cascade="all, delete-orphan")
     fm_schedule = relationship("FmSchedule", uselist=False, back_populates="message", cascade="all, delete-orphan")
     attachment_file = relationship("UploadedFile", back_populates="messages_attached_to")
 
+
 class MessageReceiver(Base):
-    __tablename__ = 'message_receivers'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    __tablename__ = 'message_receivers'
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     message_id = Column(UUID(as_uuid=True), ForeignKey('messages.id', ondelete="CASCADE"), nullable=False)
     receiver_channel = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False)
-    receiver_address = Column(Text, nullable=False); individual_send_status = Column(SQLAlchemyEnum(IndividualSendStatusEnum, name='individual_send_status_enum', create_type=False), default=IndividualSendStatusEnum.pending, nullable=False)
-    send_attempts = Column(Integer, default=0, nullable=False); last_attempt_at = Column(DateTime(timezone=True)); failure_reason = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    receiver_address = Column(Text, nullable=False)
+    individual_send_status = Column(SQLAlchemyEnum(IndividualSendStatusEnum, name='individual_send_status_enum', create_type=False), default=IndividualSendStatusEnum.pending, nullable=False)
+    send_attempts = Column(Integer, default=0, nullable=False)
+    last_attempt_at = Column(DateTime(timezone=True))
+    failure_reason = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     message = relationship("Message", back_populates="receivers")
+
 
 class FmSchedule(Base):
     __tablename__ = 'fm_schedules'
@@ -227,7 +267,9 @@ class FmSchedule(Base):
     next_send_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     message = relationship("Message", back_populates="fm_schedule")
+
 
 class SendingHistory(Base):
     __tablename__ = 'sending_history'
@@ -243,24 +285,42 @@ class SendingHistory(Base):
 
 
 class CheckinLog(Base):
-    __tablename__ = 'checkin_log'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False); checkin_timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
-    method = Column(SQLAlchemyEnum(CheckinMethodEnum, name='checkin_method_enum', create_type=False), nullable=False); created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    __tablename__ = 'checkin_log'
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    checkin_timestamp = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    method = Column(SQLAlchemyEnum(CheckinMethodEnum, name='checkin_method_enum', create_type=False), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    
     user = relationship("User", back_populates="checkin_logs")
 
+
 class ReceiverOttOptin(Base):
-    __tablename__ = 'receiver_ott_optins'; id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    sender_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False); receiver_email_identifier = Column(Text, nullable=False)
-    channel = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False); platform_specific_id = Column(Text)
+    __tablename__ = 'receiver_ott_optins'
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    sender_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    receiver_email_identifier = Column(Text, nullable=False)
+    channel = Column(SQLAlchemyEnum(ReceiverChannelEnum, name='receiver_channel_enum', create_type=False), nullable=False)
+    platform_specific_id = Column(Text)
     status = Column(SQLAlchemyEnum(OttOptInStatusEnum, name='ott_opt_in_status_enum', create_type=False), default=OttOptInStatusEnum.pending_verification, nullable=False)
-    opt_in_token = Column(Text, unique=True); opt_in_token_expires_at = Column(DateTime(timezone=True)); verified_at = Column(DateTime(timezone=True)); revoked_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    opt_in_token = Column(Text, unique=True)
+    opt_in_token_expires_at = Column(DateTime(timezone=True))
+    verified_at = Column(DateTime(timezone=True))
+    revoked_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     user = relationship("User", back_populates="ott_optins")
 
+
 class UserReview(Base):
-    __tablename__ = 'user_reviews'; user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
-    rating_points = Column(SQLAlchemyEnum(RatingPointsEnum, name='rating_points_enum', create_type=False), nullable=False); comment = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False); updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    __tablename__ = 'user_reviews'
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    rating_points = Column(SQLAlchemyEnum(RatingPointsEnum, name='rating_points_enum', create_type=False), nullable=False)
+    comment = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
     user = relationship("User", back_populates="review")
 
 
@@ -268,11 +328,13 @@ class SystemSetting(Base):
     __tablename__ = 'system_settings'
     id = Column(Integer, primary_key=True, autoincrement=True)
     setting_key = Column(Text, unique=True, nullable=False)
-    setting_value = Column(Text); description = Column(Text)
+    setting_value = Column(Text)
+    description = Column(Text)
     value_type = Column(Text, default='string', nullable=False)
     admin_editable = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
 
 class MessageThread(Base):
     __tablename__ = 'message_threads'
@@ -310,6 +372,7 @@ class InAppMessage(Base):
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_in_app_messages")
     attachment_file = relationship("UploadedFile", back_populates="in_app_messages_attached_to")
 
+
 class UserBlock(Base):
     __tablename__ = 'user_blocks'
     blocker_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
@@ -317,6 +380,7 @@ class UserBlock(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     
     blocker = relationship("User", foreign_keys=[blocker_user_id], back_populates="user_blocks")
+
 
 class SimpleCronMessage(Base):
     __tablename__ = 'simple_cron_messages'
@@ -336,5 +400,5 @@ class SimpleCronMessage(Base):
     next_send_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
-
+    
     user = relationship("User", back_populates="simple_cron_messages")

@@ -1,4 +1,4 @@
-<!-- /frontend/dashboard.html -->
+<!-- /frontend/dashboard -->
 <!-- version 1.2-->
 
 <!doctype html>
@@ -12,7 +12,7 @@
 </head>
 <body class="theme-dark main-application-page">
     <main id="main-content" class="container mt-4">
-        <!--#include virtual="/_header-dashboard.html" -->
+        <!--#include virtual="/_header-dashboard" -->
         <div class="dashboard-header mb-4">
             <h2 id="welcomeMessage">Welcome!</h2>
             <p>Current Account Status: <strong id="accountStatus">Loading...</strong></p>
@@ -36,9 +36,9 @@
                         Message Overview
                     </div>
                     <div class="card-body">
-                        <p>Initial Message (IM): <span id="imStatus">N/A</span> - <a href="/cron-message.html?type=im" id="manageImLink">Manage IM</a></p>
-                        <p>Follow-up Messages (FM): Active (<span id="fmActiveCount">0</span>) / Inactive (<span id="fmInactiveCount">0</span>) - <a href="/cron-message.html?type=fm" id="manageFmLink">Manage FMs</a></p>
-                        <p>Simple Cron Messages (SCM): Active (<span id="scmActiveCount">0</span>) / Inactive (<span id="scmInactiveCount">0</span>) - <a href="/simple-cron-email-message.html" id="manageScmLink">Manage SCMs</a></p>
+                        <p>Initial Message (IM): <span id="imStatus">N/A</span> - <a href="/cron-message?type=im" id="manageImLink">Manage IM</a></p>
+                        <p>Follow-up Messages (FM): Active (<span id="fmActiveCount">0</span>) / Inactive (<span id="fmInactiveCount">0</span>) - <a href="/cron-message?type=fm" id="manageFmLink">Manage FMs</a></p>
+                        <p>Simple Cron Messages (SCM): Active (<span id="scmActiveCount">0</span>) / Inactive (<span id="scmInactiveCount">0</span>) - <a href="/simple-cron-email-message" id="manageScmLink">Manage SCMs</a></p>
                     </div>
                 </div>
             </div>
@@ -79,7 +79,7 @@
         <div id="generalDashboardMessage" class="alert mt-3" style="display: none;"></div>
 
     </main>
-<!--#include virtual="/_footer.html" -->
+<!--#include virtual="/_footer" -->
     <script src="js/bootstrap.bundle.min.js"></script>
     <script src="js/main.js"></script>
     <script src="js/utils.js"></script>

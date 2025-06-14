@@ -209,26 +209,26 @@ async def confirm_email_endpoint(token: str, db_session: AsyncSession = Depends(
             expired_email_for_redirect = expired_token_data.get('email','')
         except BadTimeSignature:
             expired_email_for_redirect = ""
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_confirmation_expired&email={expired_email_for_redirect}")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmation_expired&email={expired_email_for_redirect}")
     except BadTimeSignature:
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_confirmation_invalid")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmation_invalid")
     
     confirmation_record = (await db_session.execute(select(EmailConfirmation).filter_by(confirmation_token=token, user_id=user_id, email=redirect_email_param))).scalars().first()
     if not confirmation_record or confirmation_record.is_confirmed:
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_confirmation_invalid_or_used&email={redirect_email_param}")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmation_invalid_or_used&email={redirect_email_param}")
     
     user = await db_session.get(User, confirmation_record.user_id)
     if not user:
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_confirmation_user_not_found&email={redirect_email_param}")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmation_user_not_found&email={redirect_email_param}")
     if user.is_confirmed_by_email:
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_already_confirmed&email={user.email}")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_already_confirmed&email={user.email}")
     
     user.is_confirmed_by_email = True
     user.updated_at = datetime.now(dt_timezone.utc)
     confirmation_record.is_confirmed = True
     confirmation_record.confirmed_at = datetime.now(dt_timezone.utc)
     await db_session.commit()
-    return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=email_confirmed_success&email={user.email}")
+    return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmed_success&email={user.email}")
 
 @router.post("/resend-confirmation",status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(RESEND_CONFIRMATION_RATE_LIMIT)
@@ -283,12 +283,12 @@ async def google_oauth_callback(
 ):
     if 'error' in request.query_params:
         return RedirectResponse(
-            url=f"{FRONTEND_BASE_URL}/signin.html?status=google_oauth_error&detail={request.query_params.get('error_description','Unknown Error')}"
+            url=f"{FRONTEND_BASE_URL}/signin?status=google_oauth_error&detail={request.query_params.get('error_description','Unknown Error')}"
         )
     
     state = request.query_params.get('state')
     if not state or state != request.session.pop('google_oauth_state', None):
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=google_oauth_state_mismatch")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=google_oauth_state_mismatch")
 
     oauth_client = AsyncOAuth2Client(
         client_id=GOOGLE_CLIENT_ID,
@@ -320,11 +320,11 @@ async def google_oauth_callback(
         user_claims.validate()
     except Exception as e:
         logger.error(f"Error during Google token exchange or validation: {e}", exc_info=True)
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=google_oauth_token_error&detail={str(e)}")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=google_oauth_token_error&detail={str(e)}")
 
     google_email = user_claims.get("email")
     if not google_email or not user_claims.get("email_verified"):
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin.html?status=google_email_not_verified&email={google_email or ''}")
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=google_email_not_verified&email={google_email or ''}")
 
     user = (await db_session.execute(select(User).filter_by(email=google_email))).scalars().first()
     
@@ -381,10 +381,10 @@ async def google_oauth_callback(
     # Nếu là người dùng mới, chuyển đến trang hoàn tất hồ sơ
     if status_param == "google_signup_success_new_user":
         logger.info(f"New Google user {user.email}. Redirecting to complete profile page.")
-        redirect_url = f"{FRONTEND_BASE_URL}/complete-profile.html?token={access_token}"
+        redirect_url = f"{FRONTEND_BASE_URL}/complete-profile?token={access_token}"
     else:
         # Nếu là người dùng cũ, vào thẳng dashboard
-        redirect_url = f"{FRONTEND_BASE_URL}/dashboard.html?token={access_token}&status={status_param}&email={user.email}"
+        redirect_url = f"{FRONTEND_BASE_URL}/dashboard?token={access_token}&status={status_param}&email={user.email}"
     
     response = RedirectResponse(url=redirect_url)
     return response

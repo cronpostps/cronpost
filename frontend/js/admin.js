@@ -1,12 +1,14 @@
 // /frontend/js/admin.js
-// version 1.5.1 (Fix - Restore System Settings functionality)
+// version 1.6 (OTP PIN Modal Integration)
+// - Replaced all `prompt()` calls with the new reusable `requestPinVerification()` modal.
+// - Removed logic for the old PIN prompt modal.
 
-console.log("--- admin.js SCRIPT STARTED (v1.5.1) ---");
+console.log("--- admin.js SCRIPT STARTED (v1.6) ---");
 
 document.addEventListener('DOMContentLoaded', () => {
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
-        window.location.href = '/signin.html?status=session_expired';
+        window.location.href = '/signin?status=session_expired';
         return;
     }
 
@@ -34,11 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const userTableHeader = document.querySelector('#users-panel thead');
     const userPagination = document.getElementById('userPagination');
     const userCountInfo = document.getElementById('userCountInfo');
-    const pinPromptModalEl = document.getElementById('pinPromptModal');
-    const pinPromptForm = document.getElementById('pinPromptForm');
-    const adminPinInput = document.getElementById('adminPinInput');
-    const pinPromptError = document.getElementById('pinPromptError');
-    const pinPromptModal = new bootstrap.Modal(pinPromptModalEl);
+    
+    // Note: Old pinPromptModal elements are no longer needed here.
 
     // --- Helper Functions ---
     function displayAdminMessage(message, isSuccess) {
@@ -73,12 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const typeBadge = user.membership_type === 'premium' ? `<span class="badge bg-warning text-dark">Premium</span>` : `<span class="badge bg-secondary">Free</span>`;
             const statusBadges = { 'INS': '<span class="badge bg-light text-dark">Inactive</span>', 'ANS_CLC': '<span class="badge bg-success">Active (CLC)</span>', 'ANS_WCT': '<span class="badge bg-primary">Active (WCT)</span>', 'FNS': '<span class="badge bg-danger">Frozen</span>' };
             const statusBadge = statusBadges[user.account_status] || `<span class="badge bg-dark">${user.account_status}</span>`;
-            let upgradeDowngradeButton;
-            if (user.membership_type === 'premium') {
-                upgradeDowngradeButton = `<button class="btn btn-outline-warning downgrade-btn" data-user-id="${user.id}" data-user-email="${user.email}">Downgrade</button>`;
-            } else {
-                upgradeDowngradeButton = `<button class="btn btn-outline-success upgrade-btn" data-user-id="${user.id}" data-user-email="${user.email}">Upgrade</button>`;
-            }
+            let upgradeDowngradeButton = user.membership_type === 'premium' 
+                ? `<button class="btn btn-outline-warning downgrade-btn" data-user-id="${user.id}" data-user-email="${user.email}">Downgrade</button>`
+                : `<button class="btn btn-outline-success upgrade-btn" data-user-id="${user.id}" data-user-email="${user.email}">Upgrade</button>`;
             const actions = `<div class="btn-group btn-group-sm" role="group">${upgradeDowngradeButton}<button class="btn btn-outline-info reset-pin-btn" data-user-id="${user.id}" data-user-email="${user.email}">Reset PIN</button><button class="btn btn-outline-danger delete-btn" data-user-id="${user.id}" data-user-email="${user.email}">Delete</button></div>`;
             tr.innerHTML = `<td>${user.email}</td><td>${user.user_name || ''}</td><td>${typeBadge}</td><td>${statusBadge}</td><td>${formatDate(user.last_activity_at)}</td><td>${formatDate(user.created_at)}</td><td>${actions}</td>`;
             usersTableBody.appendChild(tr);
@@ -148,26 +144,30 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSaveSetting(event) {
         const targetButton = event.target.closest('.save-setting-btn');
         if (!targetButton) return;
+        
         const settingKey = targetButton.dataset.key;
         const inputEl = document.getElementById(`setting-${settingKey}`);
         const newValue = inputEl.value;
-        const pin = prompt(`To save changes for '${settingKey}', please confirm your Admin PIN:`);
-        if (pin === null || !/^\d{4}$/.test(pin)) {
-            if (pin !== null) displayAdminMessage('Invalid PIN format.', false);
-            return;
-        }
-        targetButton.disabled = true;
-        targetButton.textContent = 'Saving...';
+
         try {
+            const pin = await window.requestPinVerification(`To save changes for '${settingKey}', please confirm your Admin PIN:`);
+            
+            targetButton.disabled = true;
+            targetButton.textContent = 'Saving...';
+
             const response = await fetch(`/api/admin/system-settings/${settingKey}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
                 body: JSON.stringify({ value: newValue, admin_pin: pin })
             });
             if (!response.ok) throw new Error((await response.json()).detail || 'Failed to save setting.');
+            
             displayAdminMessage(`Setting '${settingKey}' saved successfully.`, true);
+
         } catch (error) {
-            displayAdminMessage(`Error saving '${settingKey}': ${error.message}`, false);
+            // Check for cancellation string from promise rejection
+            if (typeof error === 'string' && error.includes('closed')) return; 
+            displayAdminMessage(`Error saving '${settingKey}': ${error}`, false);
         } finally {
             targetButton.disabled = false;
             targetButton.textContent = 'Save';
@@ -177,40 +177,51 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleUserAction(event) {
         const button = event.target.closest('button');
         if (!button) return;
+
         const userId = button.dataset.userId;
         const userEmail = button.dataset.userEmail;
-        let action, url, method;
+        let action, url, method, confirmMessage;
+
         if (button.classList.contains('upgrade-btn')) { action = 'upgrade'; url = `/api/admin/users/${userId}/upgrade`; method = 'PUT'; } 
         else if (button.classList.contains('downgrade-btn')) { action = 'downgrade'; url = `/api/admin/users/${userId}/downgrade`; method = 'PUT'; } 
         else if (button.classList.contains('reset-pin-btn')) {
-            if (!confirm(`Are you sure you want to reset the PIN for '${userEmail}'? This will remove their current PIN and send them a new recovery code.`)) return;
+            if (!confirm(`Are you sure you want to reset the PIN for '${userEmail}'? This will remove their current PIN.`)) return;
             action = 'reset pin for'; url = `/api/admin/users/${userId}/reset-pin`; method = 'POST';
         } else if (button.classList.contains('delete-btn')) {
             if (!confirm(`Are you sure you want to PERMANENTLY DELETE user '${userEmail}'? This action cannot be undone.`)) return;
             action = 'delete'; url = `/api/admin/users/${userId}`; method = 'DELETE';
         } else { return; }
 
-        const pin = prompt(`To ${action} user '${userEmail}', please confirm your Admin PIN:`);
-        if (pin === null) return;
-        if (!/^\d{4}$/.test(pin)) { displayAdminMessage('Invalid PIN format.', false); return; }
-
-        button.disabled = true;
-        button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>`;
         try {
+            const pin = await window.requestPinVerification(`To ${action} user '${userEmail}', please confirm your Admin PIN:`);
+            
+            button.disabled = true;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>`;
+
             const response = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
                 body: JSON.stringify({ admin_pin: pin })
             });
+
             const result = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(result.detail || `Failed to ${action} user.`);
+            
             displayAdminMessage(result.message || `Action on ${userEmail} was successful.`, true);
-            if (action === 'upgrade' || action === 'downgrade' || action === 'delete') { fetchAndDisplayUsers(); }
-            else { button.disabled = false; button.textContent = "Reset PIN"; }
+            
+            if (action === 'upgrade' || action === 'downgrade' || action === 'delete') {
+                fetchAndDisplayUsers();
+            } else {
+                 button.disabled = false;
+                 button.textContent = "Reset PIN";
+            }
         } catch (error) {
+            if (typeof error === 'string' && error.includes('closed')) return; 
             displayAdminMessage(`Error: ${error.message}`, false);
             button.disabled = false;
-            button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+            // Restore original button text
+            const originalText = action.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            button.textContent = originalText;
         }
     }
     
@@ -222,32 +233,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (settingsTableBody) settingsTableBody.addEventListener('click', handleSaveSetting);
     if (usersTableBody) usersTableBody.addEventListener('click', handleUserAction);
 
-    pinPromptForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        pinPromptError.style.display = 'none';
-        const enteredPin = adminPinInput.value;
-        const submitButton = pinPromptForm.querySelector('button[type="submit"]');
-        submitButton.disabled = true; submitButton.textContent = "Verifying...";
+    // --- Initial Load Logic ---
+    async function initializePage() {
         try {
+            // First, ask for the PIN using the new modal
+            const enteredPin = await window.requestPinVerification("Please enter your Admin PIN to access the dashboard.");
+            
+            // If PIN is provided, verify it with the backend
             const response = await fetch('/api/admin/verify-pin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
                 body: JSON.stringify({ admin_pin: enteredPin })
             });
-            if (!response.ok) throw new Error((await response.json()).detail || 'PIN verification failed.');
-            pinPromptModal.hide();
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'PIN verification failed.');
+            }
+
+            // If PIN is correct, show content and fetch data
             mainContent.style.display = 'block';
             await fetchAndDisplaySettings();
             await fetchAndDisplayUsers();
-        } catch (error) {
-            pinPromptError.textContent = error.message;
-            pinPromptError.style.display = 'block';
-        } finally {
-            submitButton.disabled = false;
-            submitButton.textContent = "Authenticate";
+        
+        } catch(error) {
+            // If user cancels the modal or PIN is wrong, redirect them
+            console.error("Authentication failed:", error);
+            // Show a message on the sign-in page that access was denied
+            window.location.href = '/signin?status=admin_auth_failed';
         }
-    });
+    }
     
-    // --- Initial Load ---
-    pinPromptModal.show();
+    initializePage();
 });

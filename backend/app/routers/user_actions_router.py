@@ -1,12 +1,11 @@
 # backend/app/routers/user_actions_router.py
-# Version: 1.5
+# Version: 1.6
 # Changelog:
-# - Refactored PIN lockout logic to use values from the database (system_settings)
-#   instead of hard-coded values.
+# - Refactored all PIN verification to use the centralized verify_user_pin_with_lockout service.
 
 import logging
-from typing import Optional
-from datetime import datetime, timedelta, timezone as dt_timezone
+from typing import Optional, Dict
+from datetime import datetime, timezone as dt_timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, constr
@@ -15,9 +14,10 @@ from sqlalchemy.future import select
 
 from ..db.database import get_db_session
 from ..db.models import User, CheckinLog, SystemSetting, UserAccountStatusEnum, CheckinMethodEnum
-from ..core.security import get_current_active_user
+# Import service và dependency cần thiết
+from ..core.security import get_current_active_user, verify_user_pin_with_lockout
+from ..dependencies import get_system_settings_dep
 from ..services.schedule_service import calculate_next_clc_prompt_at
-from ..routers.auth_router import verify_password
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -37,47 +37,28 @@ class ActionResponse(BaseModel):
 class StopFnsRequest(BaseModel):
     pin_code: constr(min_length=4, max_length=4, pattern=r"^\d{4}$")
 
-async def get_pin_lockout_settings(db: AsyncSession) -> (int, int):
-    """Helper to fetch PIN lockout settings from the database."""
-    keys = ["failed_pin_attempts_lockout_threshold", "pin_lockout_duration_minutes"]
-    stmt = select(SystemSetting).where(SystemSetting.setting_key.in_(keys))
-    result = await db.execute(stmt)
-    settings = {s.setting_key: s.setting_value for s in result.scalars().all()}
-    
-    threshold = int(settings.get("failed_pin_attempts_lockout_threshold", 5))
-    duration = int(settings.get("pin_lockout_duration_minutes", 15))
-    
-    return threshold, duration
+# Bỏ hàm get_pin_lockout_settings vì đã có dịch vụ tập trung
 
 @router.post("/check-in", response_model=ActionResponse, summary="User check-in action")
 async def user_check_in(
     request_data: CheckInRequest,
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    settings: Dict[str, str] = Depends(get_system_settings_dep) # Thêm dependency
 ):
     logger.info(f"User {current_user.email} attempting check-in.")
 
     if current_user.account_status != UserAccountStatusEnum.ANS_WCT:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Check-in is only allowed during WCT (Waiting Check-in Time).")
 
+    # === LOGIC KIỂM TRA PIN ĐÃ ĐƯỢC CHUẨN HÓA ===
     if current_user.use_pin_for_all_actions:
         if not request_data.pin_code:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="PIN code is required for check-in.")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="PIN code is required for check-in.")
         
-        lockout_threshold, lockout_duration = await get_pin_lockout_settings(db)
-
-        if current_user.account_locked_until and current_user.account_locked_until > datetime.now(dt_timezone.utc):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Account is locked. Please try again after {current_user.account_locked_until.strftime('%Y-%m-%d %H:%M:%S %Z')}.")
-
-        if not current_user.pin_code or not verify_password(request_data.pin_code, current_user.pin_code):
-            current_user.failed_pin_attempts += 1
-            if current_user.failed_pin_attempts >= lockout_threshold:
-                current_user.account_locked_until = datetime.now(dt_timezone.utc) + timedelta(minutes=lockout_duration)
-            await db.commit()
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid PIN code.")
-        else:
-            current_user.failed_pin_attempts = 0
-            current_user.account_locked_until = None
+        # Gọi dịch vụ tập trung
+        await verify_user_pin_with_lockout(db, current_user, request_data.pin_code, settings)
+    # ============================================
 
     now_utc = datetime.now(dt_timezone.utc)
     current_user.last_successful_checkin_at = now_utc
@@ -106,7 +87,8 @@ async def user_check_in(
 async def user_stop_fns(
     request_data: StopFnsRequest,
     current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session),
+    settings: Dict[str, str] = Depends(get_system_settings_dep) # Thêm dependency
 ):
     logger.info(f"User {current_user.email} attempting to stop FNS.")
 
@@ -116,21 +98,12 @@ async def user_stop_fns(
     if not current_user.pin_code:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="PIN configuration error for user. Cannot stop FNS.")
 
-    lockout_threshold, lockout_duration = await get_pin_lockout_settings(db)
+    # === LOGIC KIỂM TRA PIN ĐÃ ĐƯỢC CHUẨN HÓA ===
+    await verify_user_pin_with_lockout(db, current_user, request_data.pin_code, settings)
+    # ============================================
     
-    if current_user.account_locked_until and current_user.account_locked_until > datetime.now(dt_timezone.utc):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Account is locked. Please try again after {current_user.account_locked_until.strftime('%Y-%m-%d %H:%M:%S %Z')}.")
-
-    if not verify_password(request_data.pin_code, current_user.pin_code):
-        current_user.failed_pin_attempts += 1
-        if current_user.failed_pin_attempts >= lockout_threshold:
-            current_user.account_locked_until = datetime.now(dt_timezone.utc) + timedelta(minutes=lockout_duration)
-        await db.commit()
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid PIN code.")
-    
-    current_user.failed_pin_attempts = 0
-    current_user.account_locked_until = None
-    current_user.last_activity_at = datetime.now(dt_timezone.utc)
+    now_utc = datetime.now(dt_timezone.utc)
+    current_user.last_activity_at = now_utc
     current_user.account_status = UserAccountStatusEnum.ANS_CLC
     
     # Invalidate stop token
@@ -139,9 +112,8 @@ async def user_stop_fns(
     user_config = current_user.configuration
     if user_config:
         user_config.wct_active_ends_at = None
-        user_config.next_clc_prompt_at = await calculate_next_clc_prompt_at(user_config, current_user.timezone, datetime.now(dt_timezone.utc), db)
+        user_config.next_clc_prompt_at = await calculate_next_clc_prompt_at(user_config, current_user.timezone, now_utc, db)
 
-    # TODO: Add logic to cancel any pending messages in the sending queue for this user.
     logger.warning(f"FNS stopped for user {current_user.email}. Pending FNS messages status not yet handled automatically.")
 
     await db.commit()

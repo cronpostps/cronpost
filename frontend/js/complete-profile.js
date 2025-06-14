@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!accessToken) {
         console.error("No access token found in URL. Redirecting to signin.");
-        window.location.href = '/signin.html?status=error';
+        window.location.href = '/signin?status=error';
         return;
     }
     localStorage.setItem('accessToken', accessToken);
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     displayGeneralFormMessage(statusDiv, "Profile updated! Redirecting to dashboard...", true);
                 }
                 setTimeout(() => {
-                    window.location.href = '/dashboard.html';
+                    window.location.href = '/dashboard';
                 }, 1500);
 
             } catch (error) {

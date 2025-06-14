@@ -1,6 +1,6 @@
 -- SQL KHỞI TẠO POSTGRES DATABASE DUY NHẤT
--- VERSION: 2.9.0
--- Mô tả: Thêm bảng user_smtp_settings để hỗ trợ phương thức gửi "user-email". Cập nhật system_settings với các giới hạn người nhận mới.
+-- VERSION: 2.10.1
+-- Mô tả: Sửa lỗi cú pháp trong câu lệnh INSERT...ON CONFLICT. Thêm bảng email_checkin_settings và pin_attempts.
 
 -- KÍCH HOẠT EXTENSION CẦN THIẾT
 CREATE EXTENSION IF NOT EXISTS moddatetime; 
@@ -13,7 +13,6 @@ CREATE TYPE public.clc_type_enum AS ENUM ('every_day','specific_days','day_of_we
 CREATE TYPE public.day_of_week_enum AS ENUM ('Mon','Tue','Wed','Thu','Fri','Sat','Sun');
 CREATE TYPE public.wct_duration_unit_enum AS ENUM ('minutes','hours');
 CREATE TYPE public.message_overall_status_enum AS ENUM ('pending','processing','partially_sent','sent','failed','cancelled');
--- NEW ENUM for v2.9.0
 CREATE TYPE public.sending_method_enum AS ENUM ('cronpost_email', 'in_app_messaging', 'user_email');
 CREATE TYPE public.receiver_channel_enum AS ENUM ('email','telegram');
 CREATE TYPE public.individual_send_status_enum AS ENUM ('pending','sent','failed','skipped');
@@ -28,7 +27,6 @@ CREATE TYPE public.scm_status_enum AS ENUM ('active', 'inactive', 'paused');
 
 -- TẠO CÁC BẢNG
 
--- Bảng users
 CREATE TABLE public.users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
@@ -67,7 +65,6 @@ CREATE TABLE public.users (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng user_smtp_settings (NEW for v2.9.0)
 CREATE TABLE public.user_smtp_settings (
     user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
     smtp_server TEXT NOT NULL,
@@ -81,8 +78,24 @@ CREATE TABLE public.user_smtp_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
+CREATE TABLE public.email_checkin_settings (
+    user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+    use_checkin_token_email BOOLEAN NOT NULL DEFAULT FALSE,
+    checkin_token TEXT UNIQUE,
+    checkin_token_expires_at TIMESTAMPTZ,
+    send_additional_reminder BOOLEAN NOT NULL DEFAULT FALSE,
+    additional_reminder_minutes INT,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
 
--- Bảng email_confirmations
+CREATE TABLE public.pin_attempts (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    attempt_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    is_successful BOOLEAN NOT NULL
+);
+
 CREATE TABLE public.email_confirmations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -96,7 +109,6 @@ CREATE TABLE public.email_confirmations (
     CONSTRAINT uq_email_confirmations_token UNIQUE (confirmation_token)
 );
 
--- Bảng login_history
 CREATE TABLE public.login_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -107,7 +119,6 @@ CREATE TABLE public.login_history (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng user_configurations
 CREATE TABLE public.user_configurations (
     user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
     clc_type public.clc_type_enum NOT NULL DEFAULT 'every_day',
@@ -126,7 +137,6 @@ CREATE TABLE public.user_configurations (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng uploaded_files
 CREATE TABLE public.uploaded_files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -139,11 +149,10 @@ CREATE TABLE public.uploaded_files (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng messages
 CREATE TABLE public.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    sending_method public.sending_method_enum NOT NULL DEFAULT 'cronpost_email', -- UPDATED for v2.9.0
+    sending_method public.sending_method_enum NOT NULL DEFAULT 'cronpost_email',
     message_order INT NOT NULL DEFAULT 0,
     message_title TEXT,
     message_content TEXT NOT NULL,
@@ -155,11 +164,8 @@ CREATE TABLE public.messages (
     CONSTRAINT uq_user_message_order UNIQUE (user_id, message_order)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_unique_initial_message
-ON public.messages (user_id)
-WHERE (is_initial_message = TRUE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_user_unique_initial_message ON public.messages (user_id) WHERE (is_initial_message = TRUE);
 
--- Bảng message_receivers
 CREATE TABLE public.message_receivers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
@@ -174,7 +180,6 @@ CREATE TABLE public.message_receivers (
     CONSTRAINT uq_message_receiver_channel_address UNIQUE (message_id, receiver_channel, receiver_address)
 );
 
--- Bảng fm_schedules
 CREATE TABLE public.fm_schedules (
     message_id UUID PRIMARY KEY REFERENCES public.messages(id) ON DELETE CASCADE,
     trigger_type public.fm_schedule_trigger_type_enum NOT NULL,
@@ -190,12 +195,11 @@ CREATE TABLE public.fm_schedules (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng sending_history
 CREATE TABLE public.sending_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
     receiver_id UUID NOT NULL REFERENCES public.message_receivers(id) ON DELETE CASCADE,
-    sending_method_snapshot public.sending_method_enum NOT NULL, -- UPDATED for v2.9.0
+    sending_method_snapshot public.sending_method_enum NOT NULL,
     sent_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     status public.sending_attempt_status_enum NOT NULL,
     status_details TEXT,
@@ -203,7 +207,6 @@ CREATE TABLE public.sending_history (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng checkin_log
 CREATE TABLE public.checkin_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -212,7 +215,6 @@ CREATE TABLE public.checkin_log (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng receiver_ott_optins
 CREATE TABLE public.receiver_ott_optins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sender_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -229,7 +231,6 @@ CREATE TABLE public.receiver_ott_optins (
     CONSTRAINT uq_sender_receiver_email_channel UNIQUE (sender_user_id, receiver_email_identifier, channel)
 );
 
--- Bảng password_reset_tokens
 CREATE TABLE public.password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -240,7 +241,6 @@ CREATE TABLE public.password_reset_tokens (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng message_threads
 CREATE TABLE public.message_threads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user1_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -253,10 +253,8 @@ CREATE TABLE public.message_threads (
     CONSTRAINT chk_message_thread_distinct_users CHECK (user1_id <> user2_id)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_message_thread_users 
-ON public.message_threads (LEAST(user1_id, user2_id), GREATEST(user1_id, user2_id));
+CREATE UNIQUE INDEX IF NOT EXISTS idx_uq_message_thread_users ON public.message_threads (LEAST(user1_id, user2_id), GREATEST(user1_id, user2_id));
 
--- Bảng in_app_messages
 CREATE TABLE public.in_app_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     thread_id UUID NOT NULL REFERENCES public.message_threads(id) ON DELETE CASCADE,
@@ -273,7 +271,6 @@ CREATE TABLE public.in_app_messages (
     CONSTRAINT chk_in_app_message_sender_receiver CHECK (sender_id <> receiver_id)
 );
 
--- Bảng user_reviews
 CREATE TABLE public.user_reviews (
     user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
     rating_points public.rating_points_enum NOT NULL,
@@ -282,7 +279,6 @@ CREATE TABLE public.user_reviews (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng system_settings
 CREATE TABLE public.system_settings (
     id INT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     setting_key TEXT UNIQUE NOT NULL,
@@ -294,7 +290,6 @@ CREATE TABLE public.system_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Bảng user_blocks (chặn In-App Messaging)
 CREATE TABLE public.user_blocks (
     blocker_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     blocked_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -303,17 +298,16 @@ CREATE TABLE public.user_blocks (
     CONSTRAINT chk_no_self_block CHECK (blocker_user_id <> blocked_user_id)
 );
 
--- Bảng simple_cron_messages (SCM)
 CREATE TABLE public.simple_cron_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    sending_method public.sending_method_enum NOT NULL DEFAULT 'cronpost_email', -- UPDATED for v2.9.0
+    sending_method public.sending_method_enum NOT NULL DEFAULT 'cronpost_email',
     title TEXT,
     content TEXT NOT NULL,
     receiver_address TEXT NOT NULL,
     schedule_type public.scm_schedule_type_enum NOT NULL,
-    loop_interval_minutes INT, -- For loop type
-    unloop_send_at TIMESTAMPTZ, -- For unloop type
+    loop_interval_minutes INT,
+    unloop_send_at TIMESTAMPTZ,
     repeat_number INT NOT NULL DEFAULT 1,
     current_repetition INT NOT NULL DEFAULT 0,
     status public.scm_status_enum NOT NULL DEFAULT 'active',
@@ -337,13 +331,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_before_insert_update_fm_schedules
-BEFORE INSERT OR UPDATE ON public.fm_schedules
-FOR EACH ROW
-EXECUTE FUNCTION public.check_fm_message_not_initial();
-
+CREATE TRIGGER trigger_before_insert_update_fm_schedules BEFORE INSERT OR UPDATE ON public.fm_schedules FOR EACH ROW EXECUTE FUNCTION public.check_fm_message_not_initial();
 CREATE TRIGGER handle_updated_at_users BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
-CREATE TRIGGER handle_updated_at_user_smtp_settings BEFORE UPDATE ON public.user_smtp_settings FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at); -- NEW for v2.9.0
+CREATE TRIGGER handle_updated_at_user_smtp_settings BEFORE UPDATE ON public.user_smtp_settings FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
+CREATE TRIGGER handle_updated_at_email_checkin_settings BEFORE UPDATE ON public.email_checkin_settings FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
+CREATE TRIGGER handle_updated_at_pin_attempts BEFORE UPDATE ON public.pin_attempts FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_email_confirmations BEFORE UPDATE ON public.email_confirmations FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_user_configurations BEFORE UPDATE ON public.user_configurations FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_messages BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
@@ -360,6 +352,8 @@ CREATE TRIGGER handle_updated_at_simple_cron_messages BEFORE UPDATE ON public.si
 
 
 -- TẠO CÁC INDEXES
+CREATE INDEX IF NOT EXISTS idx_pin_attempts_user_id_time ON public.pin_attempts(user_id, attempt_time DESC);
+CREATE INDEX IF NOT EXISTS idx_email_checkin_settings_token ON public.email_checkin_settings(checkin_token);
 CREATE INDEX IF NOT EXISTS idx_email_confirmations_user_id ON public.email_confirmations(user_id);
 CREATE INDEX IF NOT EXISTS idx_email_confirmations_token ON public.email_confirmations(confirmation_token);
 CREATE INDEX IF NOT EXISTS idx_login_history_user_id_time ON public.login_history(user_id, login_time DESC);
@@ -426,10 +420,10 @@ INSERT INTO public.system_settings (setting_key, setting_value, description, val
     ('premium_lifetime_price_usd', '10', 'The lifetime price in USD for the Premium plan', 'float', true),
     ('email_sending_rate_per_hours', '50', 'System-wide email sending frequency to ensure compliance with SMTP server regulations', 'integer', true),
     ('wct_final_reminder_minutes', '3', 'Final WCT reminder time before it ends (minutes)', 'integer', true),
-    -- NEW SETTINGS FOR v2.9.0
     ('receivers_limit_cronpost_email', '5', 'Limit the number of recipients in the cronpost-email sending method', 'integer', true),
     ('receivers_limit_in_app_messaging', '10', 'Limit the number of recipients in the In-App-Messaging sending method', 'integer', true),
-    ('receivers_limit_user_email', '10', 'Limit the number of recipients in the user-email sending method', 'integer', true)
+    ('receivers_limit_user_email', '10', 'Limit the number of recipients in the user-email sending method', 'integer', true),
+    ('max_pin_attempts_log_per_user', '50', 'Maximum number of PIN attempt logs to store per user', 'integer', true)
 ON CONFLICT (setting_key) DO UPDATE SET 
     setting_value = EXCLUDED.setting_value,
     description = EXCLUDED.description,
