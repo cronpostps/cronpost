@@ -1,10 +1,7 @@
 // frontend/js/utils.js
-// Version: 1.5
-// - Removed global 401 handling from fetchWithAuth to allow local error processing.
-// - executeActionWithPinVerification now centrally handles the PIN retry loop.
-// - executeActionWithPinVerification now automatically redirects to the dashboard on account lockout.
+// Version 2.0 - Added shared helper functions
 
-console.log("--- utils.js SCRIPT STARTED (v1.5) ---");
+console.log("--- utils.js SCRIPT STARTED (v2.0) ---");
 
 // === API CALL HELPER FUNCTION ===
 
@@ -254,4 +251,126 @@ async function executeActionWithPinVerification(promptText, apiCallback) {
             }
         }
     } while (!isActionSuccessful);
+}
+
+/**
+ * Khởi tạo hoặc thay thế một instance của CKEditor 4 trên một element.
+ * @param {string} elementId - ID của thẻ <textarea> cần biến thành editor.
+ * @param {number} characterLimit - Giới hạn số ký tự tối đa cho editor.
+ */
+function createCKEditorInstance(elementId, characterLimit) {
+    // Luôn kiểm tra và xóa instance cũ nếu tồn tại để tránh lỗi
+    if (CKEDITOR.instances[elementId]) {
+        CKEDITOR.instances[elementId].destroy(true);
+    }
+
+    // Cấu hình và tạo instance mới
+    return CKEDITOR.replace(elementId, {
+        height: 250,
+        // Yêu cầu plugin WordCount và cấu hình nó
+        extraPlugins: 'wordcount',
+        wordcount: {
+            showParagraphs: false,
+            showWordCount: false,
+            showCharCount: true,      // Hiển thị bộ đếm ký tự
+            maxCharCount: characterLimit, // Đặt giới hạn ký tự
+        }
+    });
+}
+
+
+/**
+ * Cập nhật giao diện (UI) cho các vị trí hiển thị số tin nhắn chưa đọc.
+ * @param {number} count - Số tin nhắn chưa đọc.
+ */
+function updateUnreadCountUI(count) {
+    // Lấy các element một cách an toàn
+    const inAppUnreadCountSpanHeader = document.getElementById('inAppUnreadCount');
+    const quickActionUnreadCountSpan = document.getElementById('quickActionUnreadCount');
+    const inboxNavUnreadCountSpan = document.getElementById('inbox-nav-unread-count');
+
+    const spansToUpdate = [inAppUnreadCountSpanHeader, quickActionUnreadCountSpan, inboxNavUnreadCountSpan];
+    const countToShow = count > 99 ? "99+" : String(count);
+
+    spansToUpdate.forEach(span => {
+        if (span) {
+            if (count > 0) {
+                span.textContent = countToShow;
+                span.className = 'badge rounded-pill ms-2 bg-danger';
+                span.style.display = 'inline-block';
+            } else {
+                span.style.display = 'none';
+            }
+        }
+    });
+}
+
+async function fetchAndUpdateUnreadCount() {
+    try {
+        const response = await fetchWithAuth('/api/messaging/unread-count');
+        if (response.ok) {
+            const data = await response.json();
+            const count = data.unread_count || 0;
+            updateUnreadCountUI(count);
+        } else {
+            console.error("Failed to fetch unread in-app message count:", response.status);
+            updateUnreadCountUI(0);
+        }
+    } catch (error) {
+        console.error("Error fetching unread in-app message count:", error);
+        updateUnreadCountUI(0);
+    }
+}
+
+/**
+ * Converts special HTML characters to their corresponding entities to prevent XSS.
+ * @param {string} str - The input string to escape.
+ * @returns {string} The escaped string.
+ */
+function escapeHtml(str) {
+    if (str === null || typeof str === 'undefined') return '';
+    return str.toString().replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+}
+
+/**
+ * Strips HTML tags from a string to get plain text.
+ * @param {string} html - The input HTML string.
+ * @returns {string} The plain text content.
+ */
+function stripHtml(html) {
+    if (!html) return "";
+    let doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc.body.textContent || "";
+}
+
+/**
+ * Formats a number of bytes into a human-readable string (KB, MB, GB).
+ */
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals < 0 ? 0 : decimals))} ${['Bytes', 'KB', 'MB', 'GB', 'TB'][i]}`;
+}
+
+/**
+ * Formats an ISO date string into a human-readable date and time.
+ * e.g., "18 June 2025, 14:30"
+ */
+function formatDateTime(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/**
+ * Formats an ISO date string into a relative time string (e.g., "5m ago", "2h ago").
+ */
+function formatRelativeTime(iso) {
+    if (!iso) return '';
+    const dt = new Date(iso), now = new Date(),
+        diff = Math.round((now - dt) / 1000);
+    if (diff < 60) return 'now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }

@@ -1,81 +1,95 @@
 // /frontend/js/header.js
-// version 1.0
-// Handles all logic for the shared _header-dashboard partial.
+// version 1.2 (Final)
+// Handles shared header logic and initializes real-time SSE connection.
 
-console.log("--- header.js SCRIPT STARTED (v1.0) ---");
+console.log("--- header.js SCRIPT STARTED (v1.2) ---");
 
 function initializeSharedHeader() {
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
-        // If there's no token, no need to do anything here.
-        // Page-specific scripts will handle redirects.
         return;
+    }
+
+    // --- Real-time connection via Server-Sent Events ---
+    function connectToSSE() {
+        const token = localStorage.getItem('accessToken');
+        if (!token) return;
+
+        // Note: The /api/sse/notifications endpoint needs to be created on the backend.
+        // It should use sse_manager.py and validate the token from the query parameter.
+        const sse = new EventSource(`/api/sse/notifications?token=${token}`);
+
+        sse.onopen = () => {
+            console.log("SSE connection established successfully.");
+        };
+
+        // Listen for the 'unread_update' event from the server
+        sse.addEventListener('unread_update', (event) => {
+            try {
+                const eventData = JSON.parse(event.data);
+                console.log("Received unread_update event from server:", eventData);
+                const count = eventData.unread_count || 0;
+
+                // Call the global UI update function from utils.js
+                updateUnreadCountUI(count);
+
+            } catch (e) {
+                console.error("Error parsing SSE data:", e);
+            }
+        });
+
+        sse.onerror = (error) => {
+            console.error("SSE connection error:", error);
+            // The browser will automatically try to reconnect.
+            // We can close the connection here if the error persists.
+            sse.close();
+        };
     }
 
     // --- DOM Elements from Header ---
     const headerUserIdentifier = document.getElementById('headerUserIdentifier');
     const logoutButton = document.getElementById('logoutButton');
-    const inAppUnreadCountSpanHeader = document.getElementById('inAppUnreadCount');
+    // Note: The 'inAppUnreadCountSpanHeader' element is now handled by the global updateUnreadCountUI function.
 
     // --- Functions for Header ---
-
-    // Fetches minimal user data needed for the header
     async function fetchHeaderUserData() {
         if (!headerUserIdentifier) return;
         try {
-            const response = await fetch('/api/users/me', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
+            // Using the global fetchWithAuth from utils.js
+            const response = await fetchWithAuth('/api/users/me');
+
             if (response.ok) {
                 const userData = await response.json();
                 headerUserIdentifier.textContent = userData.user_name || userData.email;
+
+                const navItemUpload = document.getElementById('nav-item-upload');
+                if (navItemUpload) {
+                    if (userData.membership_type === 'premium') {
+                        navItemUpload.style.display = 'block';
+                    } else {
+                        navItemUpload.style.display = 'none';
+                    }
+                }
             } else {
-                 headerUserIdentifier.textContent = "User";
-                 console.error("Header: Failed to fetch user data", response.status);
+                headerUserIdentifier.textContent = "User";
+                console.error("Header: Failed to fetch user data", response.status);
+                const navItemUpload = document.getElementById('nav-item-upload');
+                if(navItemUpload) navItemUpload.style.display = 'none';
             }
         } catch (error) {
             headerUserIdentifier.textContent = "User";
             console.error("Header: Network error fetching user data", error);
-        }
-    }
-
-    // Fetches the unread message count for the notification badge
-    async function fetchAndUpdateUnreadCount() {
-        if (!inAppUnreadCountSpanHeader) return;
-        
-        inAppUnreadCountSpanHeader.style.display = 'none'; 
-        
-        try {
-            const response = await fetch('/api/messaging/unread-count', {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                const count = data.unread_count || 0;
-                
-                if (count > 0) {
-                    inAppUnreadCountSpanHeader.textContent = count > 99 ? "99+" : String(count);
-                    inAppUnreadCountSpanHeader.classList.add('bg-danger');
-                    inAppUnreadCountSpanHeader.style.display = 'inline-block';
-                }
-            } else {
-                console.error("Header: Failed to fetch unread message count:", response.status);
-            }
-        } catch (error) {
-            console.error("Header: Error fetching unread message count:", error);
+            const navItemUpload = document.getElementById('nav-item-upload');
+            if(navItemUpload) navItemUpload.style.display = 'none';
         }
     }
 
     // --- Event Listeners for Header ---
-
     if (logoutButton) {
         logoutButton.addEventListener('click', async (e) => {
             e.preventDefault();
             try {
-                await fetch('/api/auth/signout', {
-                    method: 'POST', 
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
+                await fetchWithAuth('/api/auth/signout', { method: 'POST' });
             } catch (err) {
                 console.error("Error calling signout API, proceeding with client-side logout anyway.", err);
             }
@@ -88,7 +102,8 @@ function initializeSharedHeader() {
 
     // --- Initial Calls for Header ---
     fetchHeaderUserData();
-    fetchAndUpdateUnreadCount();
+    fetchAndUpdateUnreadCount(); // Uses the global function from utils.js
+    connectToSSE();
 }
 
 // Ensure the header logic runs after the DOM is loaded.

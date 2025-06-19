@@ -682,7 +682,7 @@ main section:last-of-type.section-divider {
     max-height: 40px; /* Or size according to Google guidelines */
 }
 
-/* --- ADD THIS CSS BLOCK FOR OTP PIN INPUT --- */
+/* --- OTP PIN INPUT --- */
 .otp-input-container {
     display: flex;
     justify-content: center;
@@ -698,7 +698,6 @@ main section:last-of-type.section-divider {
     border-radius: .375rem;
     background-color: #343a40;
     color: #fff;
-    /* Hide spinners on number input for Chrome, Safari, Edge, Opera */
     -webkit-appearance: none;
     margin: 0;
 }
@@ -719,4 +718,63 @@ main section:last-of-type.section-divider {
     outline: 0;
     box-shadow: 0 0 0 .25rem rgba(13,110,253,.25);
 }
-/* --- END CSS BLOCK --- */
+
+/* --- IN-APP MESSAGING --- */
+
+/* Container chính chứa các tin nhắn */
+#message-view-body {
+    display: flex;
+    flex-direction: column; /* BẮT BUỘC: Sắp xếp các tin nhắn theo chiều dọc */
+}
+
+/* Container cho một nhóm tin nhắn (khung chat + timestamp) */
+.message-group-sent, .message-group-received {
+    display: flex;
+    flex-direction: column;
+    max-width: 75%;
+    margin-bottom: 1rem;
+}
+
+/* Căn chỉnh nhóm tin nhắn GỬI ĐI sang phải */
+.message-group-sent {
+    align-self: flex-end; /* Tự căn chỉnh nó sang cuối (phải) */
+    align-items: flex-end; /* Căn chỉnh nội dung bên trong nó sang phải */
+}
+
+/* Căn chỉnh nhóm tin nhắn NHẬN ĐƯỢC sang trái */
+.message-group-received {
+    align-self: flex-start; /* Tự căn chỉnh nó sang đầu (trái) */
+    align-items: flex-start; /* Căn chỉnh nội dung bên trong nó sang trái */
+}
+
+/* Khung chat chứa nội dung tin nhắn */
+.message {
+    padding: 0.75rem 1rem;
+    border-radius: 1.25rem;
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+/* Màu cho tin nhắn GỬI ĐI */
+.message-group-sent .message {
+    background-color: #007bff;
+    color: white;
+    border-bottom-right-radius: 0.25rem;
+}
+
+/* Màu cho tin nhắn NHẬN ĐƯỢC */
+.message-group-received .message {
+    background-color: #495057;
+    color: white;
+    border-bottom-left-radius: 0.25rem;
+}
+
+/* Thời gian gửi bên dưới tin nhắn */
+.message-timestamp {
+    font-size: 0.75rem;
+    color: #888;
+    margin-top: 0.25rem;
+    padding: 0 0.5rem;
+}
+
+/* --- KẾT THÚC CSS CHO IN-APP MESSAGING --- */

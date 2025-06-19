@@ -79,6 +79,8 @@ class UserProfileResponse(BaseModel):
     use_checkin_token_email: bool
     send_additional_reminder: bool
     additional_reminder_minutes: Optional[int] = None
+    max_message_chars_free: int
+    max_message_chars_premium: int
     class Config:
         from_attributes = True
 
@@ -181,7 +183,10 @@ async def read_users_me(
     )).scalars().first()
     user_config: Optional[UserConfiguration] = user.configuration
     checkin_settings: Optional[EmailCheckinSettings] = user.email_checkin_settings
-    setting_keys_needed = ["max_total_messages_free", "max_total_messages_premium", "max_total_upload_storage_gb_premium"]
+    setting_keys_needed = [
+    "max_total_messages_free", "max_total_messages_premium", "max_total_upload_storage_gb_premium",
+    "max_message_content_length_free", "max_message_content_length_premium"
+    ]
     settings = await get_system_settings(db_session, setting_keys_needed)
     try:
         if user.membership_type == UserMembershipTypeEnum.premium:
@@ -212,7 +217,9 @@ async def read_users_me(
         "has_pin": True if user.pin_code else False,
         "use_checkin_token_email": checkin_settings.use_checkin_token_email if checkin_settings else False,
         "send_additional_reminder": checkin_settings.send_additional_reminder if checkin_settings else False,
-        "additional_reminder_minutes": checkin_settings.additional_reminder_minutes if checkin_settings else 5
+        "additional_reminder_minutes": checkin_settings.additional_reminder_minutes if checkin_settings else 5,
+        "max_message_chars_free": int(settings.get('max_message_content_length_free', 5000)),
+        "max_message_chars_premium": int(settings.get('max_message_content_length_premium', 50000))
     }
     return UserProfileResponse(**response_data)
 

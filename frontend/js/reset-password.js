@@ -36,14 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Xử lý Show/Hide Password
-    if (showNewPasswordCheck && newPasswordInput) {
+    if (showNewPasswordCheck && newPasswordInput && confirmNewPasswordInput) {
         showNewPasswordCheck.addEventListener('change', () => {
-            newPasswordInput.type = showNewPasswordCheck.checked ? 'text' : 'password';
-        });
-    }
-    if (showConfirmNewPasswordCheck && confirmNewPasswordInput) {
-        showConfirmNewPasswordCheck.addEventListener('change', () => {
-            confirmNewPasswordInput.type = showConfirmNewPasswordCheck.checked ? 'text' : 'password';
+            const isChecked = showNewPasswordCheck.checked;
+            newPasswordInput.type = isChecked ? 'text' : 'password';
+            confirmNewPasswordInput.type = isChecked ? 'text' : 'password';
         });
     }
 

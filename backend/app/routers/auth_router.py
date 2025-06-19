@@ -356,6 +356,7 @@ async def google_oauth_callback(
     elif not user.google_id:
         # User đã tồn tại với email/password, liên kết tài khoản Google
         user.google_id = user_claims.get("sub")
+        user.is_confirmed_by_email = True
         user.user_name = user_claims.get("name") or user.user_name
         status_param = "google_link_success"
 

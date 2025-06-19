@@ -23,6 +23,8 @@ from sqlalchemy.orm import selectinload
 import bcrypt
 from jose import jwt as python_jose_jwt
 
+from ..dependencies import get_current_active_user
+
 try:
     from .auth_router import limiter as global_limiter
 except ImportError:
@@ -211,3 +213,13 @@ async def signin_user_endpoint(
         message=status_adjusted_message,
         account_status_after_signin=user.account_status
     )
+
+@router.post("/signout", status_code=status.HTTP_200_OK)
+async def signout(current_user: User = Depends(get_current_active_user)):
+    """
+    Handles user sign-out. In a stateless token-based system, the client
+    is responsible for deleting the token. This endpoint serves as a formal 
+    confirmation of the action from an authenticated user.
+    """
+    logger.info(f"User {current_user.email} (ID: {current_user.id}) has signed out.")
+    return {"message": "Sign-out successful."}

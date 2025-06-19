@@ -36,8 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const userTableHeader = document.querySelector('#users-panel thead');
     const userPagination = document.getElementById('userPagination');
     const userCountInfo = document.getElementById('userCountInfo');
-    
-    // Note: Old pinPromptModal elements are no longer needed here.
 
     // --- Helper Functions ---
     function displayAdminMessage(message, isSuccess) {

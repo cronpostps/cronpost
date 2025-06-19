@@ -8,15 +8,22 @@ console.log("--- auth.js SCRIPT STARTED (v2.11) ---");
 async function enforcePinSessionProtection() {
     // Return immediately if PIN is already verified for this session
     if (sessionStorage.getItem('isPinVerified') === 'true') {
+        console.log("PIN session already verified, skipping check.");
         return;
     }
 
     // Define which pages require PIN verification on load
     const protectedPages = [
-        'user-profile', 'cron-message', 'simple-cron-email', 
-        'in-app-messaging', 'upload-attach-file'
+        'user-profile',
+        'upload-file', 
+        'ucm', 
+        'scm', 
+        'iam',
+
     ];
-    const currentPage = window.location.pathname.split('/').pop();
+    // Lấy tên file từ URL, ví dụ: "upload-file" từ "/upload-file.html"
+    const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+
     if (!protectedPages.includes(currentPage)) {
         return;
     }
@@ -24,21 +31,14 @@ async function enforcePinSessionProtection() {
     console.log(`auth.js: Running PIN protection check for protected page: ${currentPage}`);
 
     try {
-        // First, get user data to see if PIN protection is enabled for them
         const response = await fetchWithAuth('/api/users/me');
         if (!response.ok) {
-             // If we can't even get the user profile, block access.
             const errorData = await response.json().catch(() => ({detail: 'Could not fetch user data.'}));
             throw new Error(errorData.detail);
         }
         const userData = await response.json();
 
-        // Only enforce PIN check if the user has enabled it and has a PIN set
         if (userData.use_pin_for_all_actions && userData.has_pin) {
-            
-            // {* ==================================================================== *}
-            // {* FIXED: verificationCallback now returns the raw response *}
-            // {* ==================================================================== *}
             const verificationCallback = async (pin) => {
                 return await fetchWithAuth('/api/users/verify-pin-session', {
                     method: 'POST',
@@ -46,36 +46,27 @@ async function enforcePinSessionProtection() {
                 });
             };
 
-            // Call the helper function from utils.js
             await executeActionWithPinVerification(
                 "For your security, please verify your PIN to continue.", 
                 verificationCallback
             );
 
-            // If the above function completes without error, PIN is verified
             sessionStorage.setItem('isPinVerified', 'true');
-            console.log("Session PIN verified successfully.");
-
+            console.log("Session PIN verified successfully via auth.js.");
         } else {
-            // If user does not require PIN, mark as verified for this session to avoid re-checking
             sessionStorage.setItem('isPinVerified', 'true');
         }
     } catch (error) {
-        // This catch block handles unrecoverable errors or user cancellation
         if (error.message?.includes('cancelled')) {
-            // This happens if the user closes the PIN modal
             console.log("PIN verification was cancelled by user. Redirecting to dashboard.");
             alert("Access to this page requires PIN verification. Redirecting to dashboard.");
             window.location.href = '/dashboard';
             return;
         }
-
-        // For any other errors during the initial check (e.g., can't load user data, session expired)
-        // Note: PIN lockouts are handled inside executeActionWithPinVerification and will redirect automatically
         if (!error.message?.includes('Session expired')) {
             console.error("Unrecoverable page access error:", error.message);
-            const mainContent = document.getElementById('main-content');
-            if(mainContent) mainContent.style.display = 'none'; // Hide content to prevent interaction
+            const mainContent = document.querySelector('.container, #main-content');
+            if(mainContent) mainContent.innerHTML = `<div class="alert alert-danger">Access Denied: ${error.message}</div>`;
             alert(`Access Denied: An error occurred during security verification. ${error.message}`);
         }
     }

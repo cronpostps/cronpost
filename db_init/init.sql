@@ -260,10 +260,11 @@ CREATE TABLE public.in_app_messages (
     thread_id UUID NOT NULL REFERENCES public.message_threads(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     receiver_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    subject TEXT,
     content TEXT NOT NULL,
     sent_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     read_at TIMESTAMPTZ,
-    attachment_file_id UUID REFERENCES public.uploaded_files(id) ON DELETE SET NULL,
+    -- attachment_file_id UUID REFERENCES public.uploaded_files(id) ON DELETE SET NULL,
     is_deleted_by_sender BOOLEAN DEFAULT FALSE NOT NULL,
     is_deleted_by_receiver BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -317,6 +318,23 @@ CREATE TABLE public.simple_cron_messages (
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
+CREATE TABLE public.contacts (
+    owner_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    contact_email TEXT NOT NULL,
+    contact_name TEXT, -- Chỉ dùng cho contact không phải là user của CronPost
+    is_cronpost_user BOOLEAN NOT NULL DEFAULT FALSE,
+    contact_user_id UUID REFERENCES public.users(id) ON DELETE SET NULL, -- Lưu ID nếu là user CronPost
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    PRIMARY KEY (owner_user_id, contact_email)
+);
+
+CREATE TABLE public.message_attachments (
+    message_id UUID NOT NULL REFERENCES public.in_app_messages(id) ON DELETE CASCADE,
+    file_id UUID NOT NULL REFERENCES public.uploaded_files(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    PRIMARY KEY (message_id, file_id)
+);
 
 -- TẠO CÁC TRIGGERS CHO `updated_at`
 CREATE OR REPLACE FUNCTION public.check_fm_message_not_initial()
@@ -349,6 +367,11 @@ CREATE TRIGGER handle_updated_at_uploaded_files BEFORE UPDATE ON public.uploaded
 CREATE TRIGGER handle_updated_at_message_threads BEFORE UPDATE ON public.message_threads FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_in_app_messages BEFORE UPDATE ON public.in_app_messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
 CREATE TRIGGER handle_updated_at_simple_cron_messages BEFORE UPDATE ON public.simple_cron_messages FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
+CREATE TRIGGER handle_updated_at_contacts BEFORE UPDATE ON public.contacts FOR EACH ROW EXECUTE PROCEDURE public.moddatetime (updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_contacts_owner_user_id ON public.contacts(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_contact_user_id ON public.contacts(contact_user_id);
+
 
 
 -- TẠO CÁC INDEXES
@@ -379,10 +402,12 @@ CREATE INDEX IF NOT EXISTS idx_message_threads_last_message_at ON public.message
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_thread_id_sent_at ON public.in_app_messages(thread_id, sent_at DESC);
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_sender_id ON public.in_app_messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_in_app_messages_receiver_id ON public.in_app_messages(receiver_id);
-CREATE INDEX IF NOT EXISTS idx_in_app_messages_attachment_file_id ON public.in_app_messages(attachment_file_id);
+-- CREATE INDEX IF NOT EXISTS idx_in_app_messages_attachment_file_id ON public.in_app_messages(attachment_file_id);
 CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked_id ON public.user_blocks(blocked_user_id);
 CREATE INDEX IF NOT EXISTS idx_scm_user_id ON public.simple_cron_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_scm_next_send_at ON public.simple_cron_messages(next_send_at) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON public.message_attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_file_id ON public.message_attachments(file_id);
 
 
 -- THÊM DỮ LIỆU MẶC ĐỊNH CHO system_settings
@@ -423,7 +448,11 @@ INSERT INTO public.system_settings (setting_key, setting_value, description, val
     ('receivers_limit_cronpost_email', '5', 'Limit the number of recipients in the cronpost-email sending method', 'integer', true),
     ('receivers_limit_in_app_messaging', '10', 'Limit the number of recipients in the In-App-Messaging sending method', 'integer', true),
     ('receivers_limit_user_email', '10', 'Limit the number of recipients in the user-email sending method', 'integer', true),
-    ('max_pin_attempts_log_per_user', '50', 'Maximum number of PIN attempt logs to store per user', 'integer', true)
+    ('max_pin_attempts_log_per_user', '50', 'Maximum number of PIN attempt logs to store per user', 'integer', true),
+    ('time_storage_message_free', '60', 'Retention period in days for In-App Messages in conversations involving only Free users.', 'integer', true),
+    ('time_storage_message_premium', '360', 'Retention period in days for In-App Messages in conversations involving at least one Premium user.', 'integer', true),
+    ('char_limit_buffer_multiplier', '2.0', 'The multiplier for the plain text character limit buffer (e.g., 2.0 means 100% buffer).', 'float', true)
+    
 ON CONFLICT (setting_key) DO UPDATE SET 
     setting_value = EXCLUDED.setting_value,
     description = EXCLUDED.description,

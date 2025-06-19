@@ -41,6 +41,29 @@ def decrypt_data(encrypted_data: str) -> str:
     if not fernet: raise ValueError("Decryption service not available.")
     return fernet.decrypt(encrypted_data.encode()).decode()
 
+async def get_user_from_token(token: str, db: AsyncSession) -> Optional[User]:
+    """
+    Giải mã JWT token và lấy thông tin người dùng tương ứng từ database.
+    Hàm này không phải là một dependency của FastAPI, dùng cho các trường hợp
+    như xác thực SSE qua query parameter.
+    Trả về object User nếu thành công, hoặc None nếu token không hợp lệ.
+    """
+    try:
+        payload = python_jose_jwt.decode(token, APP_JWT_SECRET_KEY, algorithms=[APP_JWT_ALGORITHM])
+        user_id_str = payload.get("sub")
+        if not user_id_str:
+            logger.warning("Token payload is missing 'sub' (user_id).")
+            return None
+        user_id = uuid.UUID(user_id_str)
+
+    except (JoseJWTError, ValueError, TypeError) as e:
+        logger.warning(f"Token validation failed: {e}")
+        return None
+
+    # Lấy thông tin người dùng từ database
+    user = (await db.execute(select(User).where(User.id == user_id))).scalars().first()
+    return user
+
 # --- Centralized PIN Verification Service ---
 async def verify_user_pin_with_lockout(
     db: AsyncSession,

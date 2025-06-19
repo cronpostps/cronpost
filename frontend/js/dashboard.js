@@ -434,49 +434,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function fetchAndUpdateUnreadCount() { 
-        const spansToUpdate = [inAppUnreadCountSpanHeader, quickActionUnreadCountSpan];
-
-        spansToUpdate.forEach(span => {
-            if (span) {
-                span.textContent = ""; 
-                span.style.display = 'none'; 
-                span.classList.remove('bg-danger', 'bg-success', 'bg-secondary');
-            }
-        });
-
-        try {
-            // {* SỬ DỤNG fetchWithAuth *}
-            const response = await fetchWithAuth('/api/messaging/unread-count');
-            if (response.ok) {
-                const data = await response.json();
-                const count = data.unread_count || 0;
-                
-                spansToUpdate.forEach(span => {
-                    if (span) {
-                        span.textContent = count > 99 ? "99+" : String(count);
-                        if (count > 0) {
-                            span.classList.add('bg-danger');
-                            span.style.display = 'inline-block';
-                        } else {
-                           span.style.display = 'none'; 
-                        }
-                    }
-                });
-            } else {
-                console.error("Failed to fetch unread in-app message count:", response.status);
-                spansToUpdate.forEach(span => { if (span) span.style.display = 'none'; });
-            }
-        } catch (error) {
-            console.error("Error fetching unread in-app message count:", error);
-            spansToUpdate.forEach(span => { if (span) span.style.display = 'none'; });
-        }
-    }
-
     // {* Event Listeners *}
-    if (createCronMessageBtn) createCronMessageBtn.onclick = () => { window.location.href = '/cron-message'; };
-    if (createSimpleMessageBtn) createSimpleMessageBtn.onclick = () => { window.location.href = '/simple-cron-email-message'; };
-    if (inAppMessagingQuickBtn) inAppMessagingQuickBtn.onclick = () => { window.location.href = '/in-app-messaging'; };
+    if (createCronMessageBtn) createCronMessageBtn.onclick = () => { window.location.href = '/ucm'; };
+    if (createSimpleMessageBtn) createSimpleMessageBtn.onclick = () => { window.location.href = '/scm'; };
+    if (inAppMessagingQuickBtn) inAppMessagingQuickBtn.onclick = () => { window.location.href = '/iam'; };
     if (logoutButton) { 
         logoutButton.addEventListener('click', async (e) => {
             e.preventDefault();

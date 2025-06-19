@@ -96,7 +96,7 @@ class User(Base):
     smtp_settings = relationship("UserSmtpSettings", uselist=False, back_populates="user", cascade="all, delete-orphan")
     email_checkin_settings = relationship("EmailCheckinSettings", uselist=False, back_populates="user", cascade="all, delete-orphan")
     pin_attempts = relationship("PinAttempt", back_populates="user", cascade="all, delete-orphan")
-
+    contacts = relationship("Contact", foreign_keys="[Contact.owner_user_id]", back_populates="owner", cascade="all, delete-orphan")
 
 class UserSmtpSettings(Base):
     __tablename__ = 'user_smtp_settings'
@@ -212,10 +212,20 @@ class UploadedFile(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
 
+    # Relationship đến User
     user = relationship("User", back_populates="uploaded_files")
-    messages_attached_to = relationship("Message", back_populates="attachment_file")
-    in_app_messages_attached_to = relationship("InAppMessage", back_populates="attachment_file")
 
+    # Relationship (1-nhiều) đến bảng messages CŨ (cho Ultimate Cron Message)
+    # Tên back_populates là "attachment_file" để khớp với class Message
+    cron_messages_attached_to = relationship("Message", back_populates="attachment_file")
+
+    # Relationship (nhiều-nhiều) đến bảng in_app_messages MỚI
+    # Tên back_populates là "attachments" để khớp với class InAppMessage
+    messages_attached_to = relationship(
+        "InAppMessage",
+        secondary="message_attachments",
+        back_populates="attachments"
+    )
 
 class Message(Base):
     __tablename__ = 'messages'
@@ -234,8 +244,9 @@ class Message(Base):
     user = relationship("User", back_populates="messages")
     receivers = relationship("MessageReceiver", back_populates="message", cascade="all, delete-orphan")
     fm_schedule = relationship("FmSchedule", uselist=False, back_populates="message", cascade="all, delete-orphan")
-    attachment_file = relationship("UploadedFile", back_populates="messages_attached_to")
-
+    
+    # Sửa back_populates để khớp với tên mới trong class UploadedFile
+    attachment_file = relationship("UploadedFile", back_populates="cron_messages_attached_to")
 
 class MessageReceiver(Base):
     __tablename__ = 'message_receivers'
@@ -358,10 +369,11 @@ class InAppMessage(Base):
     thread_id = Column(UUID(as_uuid=True), ForeignKey('message_threads.id', ondelete="CASCADE"), nullable=False)
     sender_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
     receiver_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), nullable=False)
+    subject = Column(Text)
     content = Column(Text, nullable=False)
     sent_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     read_at = Column(DateTime(timezone=True))
-    attachment_file_id = Column(UUID(as_uuid=True), ForeignKey('uploaded_files.id', ondelete="SET NULL"), nullable=True)
+    # Cột attachment_file_id đã bị xóa khỏi database, không cần định nghĩa ở đây nữa
     is_deleted_by_sender = Column(Boolean, default=False, nullable=False)
     is_deleted_by_receiver = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
@@ -370,8 +382,13 @@ class InAppMessage(Base):
     thread = relationship("MessageThread", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_in_app_messages")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_in_app_messages")
-    attachment_file = relationship("UploadedFile", back_populates="in_app_messages_attached_to")
-
+    
+    # Xóa bỏ relationship cũ và đảm bảo relationship mới được định nghĩa đúng
+    attachments = relationship(
+        "UploadedFile",
+        secondary="message_attachments",
+        back_populates="messages_attached_to"
+    )
 
 class UserBlock(Base):
     __tablename__ = 'user_blocks'
@@ -402,3 +419,24 @@ class SimpleCronMessage(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
     
     user = relationship("User", back_populates="simple_cron_messages")
+
+class Contact(Base):
+    __tablename__ = 'contacts'
+    owner_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="CASCADE"), primary_key=True)
+    contact_email = Column(Text, primary_key=True)
+    contact_name = Column(Text, nullable=True)
+    is_cronpost_user = Column(Boolean, default=False, nullable=False)
+    contact_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
+
+    # Relationship để lấy thông tin của chủ sở hữu danh bạ
+    owner = relationship("User", foreign_keys=[owner_user_id], back_populates="contacts")
+    # Relationship để lấy thông tin của contact NẾU họ là user của CronPost
+    contact_user = relationship("User", foreign_keys=[contact_user_id])
+
+class MessageAttachment(Base):
+    __tablename__ = 'message_attachments'
+    message_id = Column(UUID(as_uuid=True), ForeignKey('in_app_messages.id', ondelete="CASCADE"), primary_key=True)
+    file_id = Column(UUID(as_uuid=True), ForeignKey('uploaded_files.id', ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(dt_timezone.utc), nullable=False)
