@@ -7,98 +7,106 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>In-App Messenger - CronPost</title>
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/style.css" rel="stylesheet">
-    <!-- CSS cho giao diện hòm thư sẽ được chuyển vào style.css sau -->
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
     <style>
-        #mailbox-nav .nav-link { cursor: pointer; }
-        .nav-pills .nav-link.active, .nav-pills .show>.nav-link { color: #fff; background-color: #0d6efd; }
-        .nav-pills .nav-link { color: var(--bs-body-color); }
-        .nav-pills .nav-link:hover { background-color: var(--bs-secondary-bg); }
-        .sub-nav .nav-link { padding-left: 2.5rem; }
+        <!-- Custom styles for the new IAM layout -->
+        #iam-main-card .card-header {
+            padding: 0.5rem 1rem;
+        }
+        #iam-nav-tabs .nav-link {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+        }
+        #iam-content-pane {
+            min-height: 65vh;
+            position: relative;
+        }
+        #iam-message-detail-view .message-body {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding: 1.25rem;
+            border-top: 1px solid var(--bs-border-color);
+        }
         .unread-indicator {
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            display: inline-block;
+            background-color: transparent;
+            flex-shrink: 0;
             margin-right: 10px;
-            flex-shrink: 0; /* Đảm bảo chấm tròn không bị co lại */
         }
         .unread-indicator.unread {
-            background-color: #0d6efd; /* Màu xanh cho tin chưa đọc */
+            background-color: var(--bs-primary);
         }
     </style>
 </head>
 <body class="theme-dark">
     <!--#include virtual="/_header-dashboard" -->
 
-    <div id="wrapper">
-        <div class="container mt-4">
+    <div id="header-placeholder"></div>
 
-            <div class="row">
-                <aside class="col-md-4 col-lg-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <nav class="nav flex-column nav-pills" id="mailbox-nav">
-                                <a class="nav-link" data-folder="all">All In-App Messages</a>
-                                <hr>
-                                <a class="nav-link active d-flex justify-content-between align-items-center" data-folder="inbox">
-                                    <span>Inbox</span>
-                                    <span id="inbox-nav-unread-count" class="badge rounded-pill"></span>
-                                </a>
-                                <a class="nav-link" data-folder="sent">Sent</a>
-                                <hr>
-                                <a class="nav-link" data-folder="contacts">Contacts</a>
-                                <a class="nav-link" data-folder="blocked">Blocked Users</a>
-                            </nav>
-                        </div>
-                    </div>
-                </aside>
+    <div class="container mt-4">
+        <div id="iam-main-card" class="card">
+            <!-- Toolbar for navigation and main actions -->
+            <div class="card-header d-flex justify-content-between align-items-center" id="iam-toolbar">
+                <div class="d-flex align-items-center">
+                    <ul class="nav nav-pills" id="iam-nav-tabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" data-folder="inbox">
+                                Inbox <span id="iam-inbox-unread-count" class="badge bg-danger rounded-pill ms-1" style="display: none;"></span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-folder="sent">Sent</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" data-folder="contacts">Contacts</a>
+                        </li>
+                    </ul>
 
-                <main class="col-md-8 col-lg-9">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <div class="d-flex align-items-center">
-                                <h5 id="main-pane-title" class="mb-0 me-3">Inbox</h5>
-                                <button id="mark-all-read-btn" class="btn btn-sm btn-outline-secondary" style="display: none;">Mark all as read</button>
-                            </div>
-                            <div id="main-pane-actions">
-                                <button id="add-contact-button" class="btn btn-info btn-sm" style="display: none;">Add Contact</button>
-                                <button id="reply-button" class="btn btn-secondary btn-sm" style="display: none;">Reply</button>
-                                <button id="delete-button" class="btn btn-danger btn-sm" style="display: none;">Delete</button>
-                                <button id="compose-button" class="btn btn-primary btn-sm">Compose</button>
-                            </div>
-                        </div>
-                        <div class="p-3 border-bottom">
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="icon-magnifier"></i></span>
-                                <input type="search" id="message-search-input" class="form-control" placeholder="Search by name, email, subject, or content...">
-                            </div>
-                        </div>
-                        <div id="main-pane-content" class="card-body" style="height: 65vh; overflow-y: auto;">
-                            <div class="text-center p-5 text-muted">
-                                <p>Loading...</p>
-                                <div class="spinner-border" role="status"></div>
-                            </div>
-                        </div>
+                    <div id="iam-select-actions" class="ms-4" style="display: none;">
+                        <button class="btn btn-danger btn-sm" id="iam-delete-selected-btn">Delete Selected</button>
+                        <button class="btn btn-secondary btn-sm" id="iam-deselect-all-btn">Deselect All</button>
                     </div>
-                </main>
+                </div>
+
+                <div>
+                    <button class="btn btn-outline-secondary me-2" id="iam-select-btn">Select</button>
+                    <button class="btn btn-primary" id="iam-compose-btn">Compose</button>
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="p-3 border-bottom" id="iam-search-section">
+                <div class="input-group">
+                    <input type="search" id="iam-search-input" class="form-control" placeholder="Search by sender, subject, or content...">
+                    <button id="iam-search-btn" class="btn btn-outline-secondary">Search</button>
+                </div>
+            </div>
+
+            <!-- Main Content Pane where lists and messages will be loaded -->
+            <div class="card-body" id="iam-content-pane">
+                <div class="text-center p-5" id="iam-loading-spinner">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <!--#include virtual="/_footer" -->
-    <!-- Load Scripts -->
+    <div id="footer-placeholder"></div>
+
     <script src="js/bootstrap.bundle.min.js"></script>
     <script src="ckeditor/ckeditor.js"></script>
-
     <script src="js/utils.js"></script>
     <script src="js/main.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/header.js"></script>
     <script src="js/pin-modal.js"></script>
     <script src="js/editor_manager.js"></script>
-    
     <script src="js/iam.js"></script>
 
 </body>

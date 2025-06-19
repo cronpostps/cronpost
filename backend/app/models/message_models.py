@@ -118,8 +118,7 @@ class FollowMessageResponse(MessageResponseBase):
 # --- In-App Messaging Models ---
 
 class InAppMessageCreate(BaseModel):
-    """Schema để gửi một tin nhắn in-app mới."""
-    receiver_email: EmailStr = Field(..., description="Email của người nhận.")
+    receiver_emails: List[EmailStr]
     subject: Optional[str] = Field(None, max_length=255)
     content: str = Field(..., description="Nội dung tin nhắn.")
     attachment_file_ids: Optional[List[uuid.UUID]] = Field([], description="Danh sách các UUID của file muốn đính kèm.")

@@ -1,393 +1,354 @@
 // /frontend/js/iam.js
-// Version 7.5.0
+// Version 8.2.0 - Implemented multi-select and delete functionality.
 
-document.addEventListener('DOMContentLoaded', () => {
-
-    // --- STATE & PAGE-SPECIFIC ELEMENTS ---
+(function() {
+    // --- STATE MANAGEMENT ---
     let currentUser = null;
-    let currentFolder = 'inbox';
-    let messageList = [];
-    let activeMessage = null;
+    let currentView = { folder: 'inbox', messageId: null, searchTerm: '' };
+    let messageCache = {};
+    let isSelectMode = false;
+    let selectedMessageIds = new Set();
 
-    const navLinks = document.querySelectorAll('#mailbox-nav .nav-link');
-    const mainPaneTitle = document.getElementById('main-pane-title');
-    const mainPaneContent = document.getElementById('main-pane-content');
-    const messageSearchInput = document.getElementById('message-search-input');
-    
-    const composeButton = document.getElementById('compose-button');
-    const replyButton = document.getElementById('reply-button');
-    const deleteButton = document.getElementById('delete-button');
-    const markAllReadBtn = document.getElementById('mark-all-read-btn');
-    const addContactButton = document.getElementById('add-contact-button');
+    // --- DOM Elements ---
+    const contentPane = document.getElementById('iam-content-pane');
+    const navTabs = document.querySelectorAll('#iam-nav-tabs .nav-link');
+    const composeBtn = document.getElementById('iam-compose-btn');
+    const searchInput = document.getElementById('iam-search-input');
+    const searchBtn = document.getElementById('iam-search-btn');
+    const searchSection = document.getElementById('iam-search-section');
+    const spinner = document.getElementById('iam-loading-spinner');
+    const inboxBadge = document.getElementById('iam-inbox-unread-count');
+    // New elements for select mode
+    const selectBtn = document.getElementById('iam-select-btn');
+    const selectActions = document.getElementById('iam-select-actions');
+    const deleteSelectedBtn = document.getElementById('iam-delete-selected-btn');
+    const deselectAllBtn = document.getElementById('iam-deselect-all-btn');
 
-
-    // --- INITIALIZATION ---
-    async function initializePage() {
+    async function initializeApp() {
         try {
             const response = await fetchWithAuth('/api/users/me');
             if (!response.ok) throw new Error("Failed to fetch user data.");
             currentUser = await response.json();
-
-            if (typeof EditorManager !== 'undefined') {
-                EditorManager.init(currentUser);
-            }
-
-            setupEventListeners();
-            await fetchAndRenderFolder('inbox');
-
+            if (typeof EditorManager !== 'undefined') EditorManager.init(currentUser);
         } catch (error) {
-            console.error("Initialization failed:", error);
-            mainPaneContent.innerHTML = `<div class="alert alert-danger">Error loading page content.</div>`;
-        }
-    }
-
-
-    // --- EVENT LISTENERS ---
-    function setupEventListeners() {
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const folder = e.currentTarget.dataset.folder;
-                if (folder) {
-                    navLinks.forEach(l => l.classList.remove('active'));
-                    e.currentTarget.classList.add('active');
-                    fetchAndRenderFolder(folder);
-                }
-            });
-        });
-        let searchDebounceTimer;
-        messageSearchInput.addEventListener('input', (event) => {
-            clearTimeout(searchDebounceTimer);
-            const searchTerm = event.target.value.trim();
-            searchDebounceTimer = setTimeout(() => handleSearch(searchTerm), 500);
-        });        
-        deleteButton.addEventListener('click', handleDeleteClick);
-        replyButton.addEventListener('click', handleReplyClick);
-        composeButton.addEventListener('click', handleComposeClick);
-        markAllReadBtn.addEventListener('click', handleMarkAllRead);
-    }
-    
-    
-    // --- CORE LOGIC ---
-    async function fetchAndRenderFolder(folder) {
-        currentFolder = folder;
-        activeMessage = null;
-        updateButtonVisibility(false);
-        mainPaneContent.innerHTML = renderSpinner();
-        
-        const titleMap = {
-            'inbox': 'Inbox', 'sent': 'Sent', 'all': 'All Messages', 
-            'contacts': 'Contacts', 'blocked': 'Blocked Users'
-        };
-        mainPaneTitle.textContent = titleMap[folder] || 'Inbox';
-        
-        if (folder === 'contacts') {
-            // Tải fragment HTML, sau đó tải và chạy script của nó
-            await loadHtmlFragment('/contacts.html', mainPaneContent, '/js/contacts.js');
+            contentPane.innerHTML = `<div class="alert alert-danger">Error loading page. Please try again later.</div>`;
             return;
         }
+        setupEventListeners();
+        await renderCurrentView();
+        await fetchAndUpdateInboxBadge();
+    }
 
-        // Xử lý các folder tin nhắn còn lại
+    function setupEventListeners() {
+        navTabs.forEach(tab => tab.addEventListener('click', handleNavClick));
+        if (composeBtn) composeBtn.addEventListener('click', handleComposeClick);
+        if (searchBtn) searchBtn.addEventListener('click', handleSearch);
+        if (searchInput) searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSearch(); });
+        if (contentPane) contentPane.addEventListener('click', handleContentPaneClick);
+        // New listeners for select mode buttons
+        if (selectBtn) selectBtn.addEventListener('click', () => toggleSelectMode());
+        if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', handleDeleteSelected);
+        if (deselectAllBtn) deselectAllBtn.addEventListener('click', () => toggleSelectMode(true));
+    }
+
+    async function renderCurrentView() {
+        showSpinner();
+        if (isSelectMode) toggleSelectMode(true); // Always exit select mode on view change
+
+        const isMessageFolder = ['inbox', 'sent'].includes(currentView.folder);
+        if (selectBtn) selectBtn.style.display = isMessageFolder ? 'inline-block' : 'none';
+
+        if (currentView.messageId) {
+            await renderMessageDetail(currentView.messageId);
+        } else {
+            switch (currentView.folder) {
+                case 'inbox':
+                case 'sent':
+                    await renderMessageList(currentView.folder);
+                    break;
+                case 'search':
+                    await renderSearchResults(currentView.searchTerm);
+                    break;
+                case 'contacts':
+                    await renderContactsView();
+                    break;
+            }
+        }
+        hideSpinner();
+    }
+
+    async function renderMessageList(folder) {
         try {
-            const apiUrl = `/api/messaging/${folder}`;
-            const response = await fetchWithAuth(apiUrl);
-            if (!response.ok) throw new Error(`Failed to fetch ${folder}.`);
-            messageList = await response.json();
-            renderMessageList(messageList);
+            if (folder !== 'inbox' && messageCache[folder]) { /* use cache */ } 
+            else {
+                const response = await fetchWithAuth(`/api/messaging/${folder}`);
+                if (!response.ok) throw new Error(`Failed to fetch ${folder}.`);
+                messageCache[folder] = await response.json();
+            }
+            const messages = messageCache[folder];
+
+            if (messages.length === 0) {
+                contentPane.innerHTML = `<div class="text-center p-5 text-muted">Your ${folder} is empty.</div>`;
+                return;
+            }
+
+            const rowsHtml = messages.map(msg => {
+                const isUnread = folder === 'inbox' && msg.read_at === null;
+                const isSelected = selectedMessageIds.has(msg.id);
+                let otherPartyDisplay = '';
+                if (msg.sender.id === currentUser.id) {
+                    const rName = escapeHtml(msg.receiver.user_name), rEmail = escapeHtml(msg.receiver.email);
+                    otherPartyDisplay = `To: ${rName ? `${rName} (${rEmail})` : rEmail}`;
+                } else {
+                    const sName = escapeHtml(msg.sender.user_name), sEmail = escapeHtml(msg.sender.email);
+                    otherPartyDisplay = `From: ${sName ? `${sName} (${sEmail})` : sEmail}`;
+                }
+
+                return `
+                <div class="list-group-item list-group-item-action message-item d-flex align-items-center" data-message-id="${msg.id}" data-thread-id="${msg.thread_id}">
+                    ${isSelectMode ? `<input type="checkbox" class="form-check-input iam-select-checkbox" data-message-id="${msg.id}" ${isSelected ? 'checked' : ''}>` : `<span class="unread-indicator ${isUnread ? 'unread' : ''}"></span>`}
+                    <div class="flex-grow-1 ${isSelectMode ? 'ms-3' : ''}">
+                        <div class="d-flex w-100 justify-content-between">
+                            <p class="mb-1 ${isUnread ? 'fw-bold' : ''}">${otherPartyDisplay}</p>
+                            <small class="${isUnread ? 'text-primary fw-bold' : 'text-muted'}">${formatRelativeTime(msg.sent_at)}</small>
+                        </div>
+                        <h6 class="mb-1 ${isUnread ? 'fw-bold' : ''}">${escapeHtml(msg.subject || '(no subject)')}</h6>
+                        <p class="mb-1 text-muted text-truncate">${stripHtml(msg.content)}</p>
+                    </div>
+                </div>`;
+            }).join('');
+            contentPane.innerHTML = `<div class="list-group list-group-flush">${rowsHtml}</div>`;
+
         } catch (error) {
-            console.error(`Error loading content for ${folder}:`, error);
-            mainPaneContent.innerHTML = `<div class="alert alert-danger">Could not load content.</div>`;
+            contentPane.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
         }
     }
 
-    // --- ACTION HANDLERS (Calling the EditorManager) ---
+    function toggleSelectMode(forceExit = false) {
+        isSelectMode = forceExit ? false : !isSelectMode;
+        
+        if (!isSelectMode) {
+            selectedMessageIds.clear();
+        }
 
-    function handleComposeClick() {
-        if (typeof EditorManager !== 'undefined') EditorManager.open({ onSend: window.sendInAppMessage });
+        if(selectBtn) selectBtn.style.display = isSelectMode ? 'none' : 'inline-block';
+        if(selectActions) selectActions.style.display = isSelectMode ? 'block' : 'none';
+        
+        updateDeleteButtonState();
+        renderMessageList(currentView.folder); // Re-render to show/hide checkboxes
+    }
+
+    function updateDeleteButtonState() {
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.disabled = selectedMessageIds.size === 0;
+            deleteSelectedBtn.textContent = selectedMessageIds.size > 0 ? `Delete Selected (${selectedMessageIds.size})` : 'Delete Selected';
+        }
+    }
+
+    function handleNavClick(event) {
+        if(isSelectMode) toggleSelectMode(true); // Exit select mode when changing tabs
+        
+        const targetFolder = event.currentTarget.dataset.folder;
+        if (targetFolder === currentView.folder && currentView.messageId === null) return;
+        
+        if (searchSection) searchSection.style.display = (targetFolder === 'contacts') ? 'none' : 'block';
+
+        navTabs.forEach(tab => tab.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+
+        currentView.folder = targetFolder;
+        currentView.messageId = null;
+        currentView.searchTerm = '';
+        if(searchInput) searchInput.value = '';
+        
+        renderCurrentView();
     }
 
     function handleReplyClick() {
-        if (!activeMessage || typeof EditorManager === 'undefined') return;
+        const message = findMessageInCache(currentView.messageId);
+        if (!message || typeof EditorManager === 'undefined') return;
+
         const quotedContent = `
             <br><br>
-            <p>--- On ${formatDateTime(activeMessage.sent_at)}, ${escapeHtml(activeMessage.sender.user_name || activeMessage.sender.email)} wrote: ---</p>
-            <blockquote>${activeMessage.content}</blockquote>
+            <p>--- On ${formatDateTime(message.sent_at)}, ${escapeHtml(message.sender.user_name || message.sender.email)} wrote: ---</p>
+            <blockquote>${message.content}</blockquote>
         `;
+
         EditorManager.open({
-            recipient: activeMessage.sender.email,
-            subject: `Re: ${activeMessage.subject || ''}`,
+            recipient: message.sender.email,
+            subject: `Re: ${message.subject || ''}`,
             content: quotedContent,
-            onSend: window.sendInAppMessage
+            onSend: handleSendMessage
         });
     }
 
-    /**
-     * SEND CALLBACK FUNCTION - Passed to the EditorManager
-     */
+    async function handleContentPaneClick(event) {
+        // Khai báo tất cả các phần tử có thể được click
+        const checkbox = event.target.closest('.iam-select-checkbox');
+        const messageItem = event.target.closest('.message-item');
+        const backBtn = event.target.closest('#iam-back-btn');
+        const replyBtn = event.target.closest('#iam-reply-btn');
+        const downloadLink = event.target.closest('.download-attachment');
 
-    window.sendInAppMessage = async function(data) {
-        console.log("Sending In-App Message with data:", data);
-        if (!data.recipient || !data.content) {
-            alert('Recipient and message content are required.');
-            return { success: false };
+        // Sắp xếp lại thứ tự kiểm tra cho đúng logic
+        if (checkbox) {
+            // Nếu click trực tiếp vào checkbox
+            const messageId = checkbox.dataset.messageId;
+            if (checkbox.checked) {
+                selectedMessageIds.add(messageId);
+            } else {
+                selectedMessageIds.delete(messageId);
+            }
+            updateDeleteButtonState();
+        } else if (isSelectMode && messageItem) {
+            // Nếu đang ở chế độ chọn và click vào cả item
+            const innerCheckbox = messageItem.querySelector('.iam-select-checkbox');
+            if (innerCheckbox) {
+                innerCheckbox.checked = !innerCheckbox.checked;
+                // Kích hoạt sự kiện để logic thêm/xóa ID được chạy
+                innerCheckbox.dispatchEvent(new Event('click', { bubbles: true }));
+            }
+        } else if (replyBtn) {
+            // Nếu click nút Reply
+            event.preventDefault();
+            handleReplyClick();
+        } else if (backBtn) {
+            // Nếu click nút Back
+            event.preventDefault();
+            currentView.messageId = null;
+            renderCurrentView();
+        } else if (messageItem) {
+            // Nếu click vào message item (ở chế độ thường)
+            event.preventDefault();
+            currentView.messageId = messageItem.dataset.messageId;
+            renderCurrentView();
+        } else if (downloadLink) {
+            // Nếu click link download
+            event.preventDefault();
+            await handleDownloadClick(downloadLink);
         }
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(data.recipient)) {
-            alert('Invalid recipient email format. Please check again.');
-            return { success: false };
-        }
+    }
 
+    async function handleDeleteSelected() {
+        if (selectedMessageIds.size === 0) return;
+        if (!confirm(`Are you sure you want to delete ${selectedMessageIds.size} message(s)? This action cannot be undone.`)) return;
+
+        deleteSelectedBtn.disabled = true;
+        deleteSelectedBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Deleting...`;
+
+        const deletePromises = [];
+        for (const messageId of selectedMessageIds) {
+            deletePromises.push(
+                fetchWithAuth(`/api/messaging/${messageId}`, { method: 'DELETE' })
+            );
+        }
 
         try {
+            await Promise.all(deletePromises);
+        } catch (error) {
+            console.error("Error during multi-delete:", error);
+            alert("An error occurred while deleting messages. Some messages may not have been deleted.");
+        } finally {
+            // Invalidate cache for the current folder
+            delete messageCache[currentView.folder];
+            // Exit select mode and re-render
+            toggleSelectMode(true);
+            await renderCurrentView();
+        }
+    }
+    
+    async function renderMessageDetail(messageId) {
+        const message = findMessageInCache(messageId);
+        if (!message) {
+            contentPane.innerHTML = `<div class="alert alert-danger">Message not found.</div>`;
+            return;
+        }
+        if (currentView.folder === 'inbox' && message.read_at === null) {
+            try {
+                await fetchWithAuth(`/api/messaging/threads/${message.thread_id}`);
+                message.read_at = new Date().toISOString();
+                delete messageCache['inbox'];
+                await fetchAndUpdateInboxBadge();
+            } catch (e) { console.error("Failed to mark thread as read", e); }
+        }
+        let attachmentsHtml = '';
+        if (message.attachments && message.attachments.length > 0) {
+            attachmentsHtml = '<hr><div class="p-3"><h6 class="mb-2">Attachments:</h6>' + message.attachments.map(file => `<div><a href="#" class="download-attachment" data-file-id="${file.id}" data-filename="${escapeHtml(file.original_filename)}">${escapeHtml(file.original_filename)}</a> <span class="text-muted ms-2">(${formatBytes(file.filesize_bytes)})</span></div>`).join('') + '</div>';
+        }
+        const fromName = escapeHtml(message.sender.user_name),
+            fromEmail = escapeHtml(message.sender.email),
+            fromDisplay = fromName ? `${fromName} (${fromEmail})` : fromEmail;
+        const toName = escapeHtml(message.receiver.user_name),
+            toEmail = escapeHtml(message.receiver.email),
+            toDisplay = toName ? `${toName} (${toEmail})` : toEmail;
+        const detailHtml = `<div id="iam-message-detail-view">
+                <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary" id="iam-back-btn">&larr; Back to ${currentView.folder}</button>
+                    <button class="btn btn-sm btn-primary" id="iam-reply-btn">Reply</button>
+                </div>
+                <div class="p-3">
+                    <h5>${escapeHtml(message.subject || '(no subject)')}</h5>
+                    <p class="mb-1"><strong>From:</strong> ${fromDisplay}</p>
+                    <p class="mb-1"><strong>To:</strong> ${toDisplay}</p>
+                    <p class="text-muted"><strong>Sent:</strong> ${formatDateTime(message.sent_at)}</p>
+                </div>
+                <div class="message-body">${message.content}</div>
+                ${attachmentsHtml}
+            </div>`;
+        contentPane.innerHTML = detailHtml;
+    }
+    
+    async function handleSendMessage(data) {
+        // {* MODIFIED: Updated validation to check the receiver_emails array *}
+        if (!data.receiver_emails || data.receiver_emails.length === 0 || !data.content) {
+            alert('Recipient(s) and message content are required.');
+            return { success: false };
+        }
+        try {
             const payload = {
-                receiver_email: data.recipient,
+                // {* MODIFIED: Use the correct key for the payload *}
+                receiver_emails: data.receiver_emails,
                 subject: data.subject,
                 content: data.content,
                 attachment_file_ids: data.attachmentIds
             };
             const response = await fetchWithAuth('/api/messaging/send', {
-                method: 'POST',
-                body: JSON.stringify(payload)
+                method: 'POST', body: JSON.stringify(payload)
             });
-
             if (!response.ok) {
-                throw await response.json();
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to send message.');
             }
             
-            await fetchAndRenderFolder('sent');
-            document.querySelectorAll('#mailbox-nav .nav-link').forEach(l => l.classList.remove('active'));
-            document.querySelector('#mailbox-nav .nav-link[data-folder="sent"]').classList.add('active');
-            
-            return { success: true };
+            // Invalidate cache for sent folder and switch to it
+            delete messageCache['sent'];
+            document.querySelector('#iam-nav-tabs .nav-link[data-folder="sent"]').click();
 
+            return { success: true };
         } catch (error) {
-            console.error("Send message error object:", error);
-            
-            let errorMessage = 'An unknown error occurred.';
-            if (error && error.detail) {
-                if (Array.isArray(error.detail)) {
-                    errorMessage = error.detail.map(e => e.msg).join(', ');
-                } 
-                else if (typeof error.detail === 'string') {
-                    errorMessage = error.detail;
-                }
-            }
-            else if (error && error.message) {
-                errorMessage = error.message;
-            }
-            
-            alert(`Error: ${errorMessage}`);
-            
+            alert(`Error: ${error.message}`);
             return { success: false };
         }
     }
+    
+    async function renderContactsView() { await loadHtmlFragment('/contacts.html', contentPane, '/js/contacts.js'); }
+    async function renderSearchResults(term) { if (!term) { contentPane.innerHTML = '<p class="text-center p-5">Please enter a search term.</p>'; return; } try { const response = await fetchWithAuth(`/api/messaging/search?q=${encodeURIComponent(term)}`); if (!response.ok) throw new Error('Search request failed.'); const messages = await response.json(); if (messages.length === 0) { contentPane.innerHTML = `<div class="text-center p-5 text-muted">No results found for "<strong>${escapeHtml(term)}</strong>".</div>`; return; } const header = `<div class="p-3 border-bottom">Search results for "<strong>${escapeHtml(term)}</strong>":</div>`; const rowsHtml = messages.map(msg => { const otherParty = `From: ${escapeHtml(msg.sender.user_name || msg.sender.email)}`; return `<a href="#" class="list-group-item list-group-item-action message-item" data-message-id="${msg.id}" data-thread-id="${msg.thread_id}"><div class="d-flex w-100 justify-content-between"><p class="mb-1">${otherParty}</p><small class="text-muted">${formatRelativeTime(msg.sent_at)}</small></div><h6 class="mb-1">${escapeHtml(msg.subject || '(no subject)')}</h6></a>`; }).join(''); contentPane.innerHTML = header + `<div class="list-group list-group-flush">${rowsHtml}</div>`; } catch (error) { contentPane.innerHTML = `<div class="alert alert-danger">${error.message}</div>`; } }
+    function handleSearch() { const term = searchInput.value.trim(); if (!term) return; navTabs.forEach(tab => tab.classList.remove('active')); currentView.folder = 'search'; currentView.messageId = null; currentView.searchTerm = term; renderCurrentView(); }
+    function handleComposeClick() { if (typeof EditorManager !== 'undefined') { EditorManager.open({ onSend: handleSendMessage }); } }
+    
+    async function handleDownloadClick(linkElement) { const fileId = linkElement.dataset.fileId, filename = linkElement.dataset.filename, originalText = linkElement.innerHTML; linkElement.innerHTML = 'Downloading...'; linkElement.style.pointerEvents = 'none'; try { const response = await fetchWithAuth(`/api/files/download/${fileId}`); if (!response.ok) throw new Error('Download failed.'); const blob = await response.blob(); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.style.display = 'none'; a.href = url; a.download = filename; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); a.remove(); } catch (error) { alert(`Error: ${error.message}`); } finally { linkElement.innerHTML = originalText; linkElement.style.pointerEvents = 'auto'; } }
+    async function fetchAndUpdateInboxBadge() { if (!inboxBadge) return; try { const response = await fetchWithAuth('/api/messaging/unread-count'); if(response.ok) { const data = await response.json(); const count = data.unread_count || 0; if (count > 0) { inboxBadge.textContent = count > 99 ? '99+' : count; inboxBadge.style.display = 'inline-block'; } else { inboxBadge.style.display = 'none'; } } } catch(e) { console.error("Failed to fetch unread count for badge.", e); inboxBadge.style.display = 'none'; } }
+    function showSpinner() { if(spinner) spinner.style.display = 'block'; contentPane.innerHTML = ''; }
+    function hideSpinner() { if(spinner) spinner.style.display = 'none'; }
+    function findMessageInCache(messageId) { for (const folder in messageCache) { const found = messageCache[folder]?.find(m => m.id === messageId); if (found) return found; } return null; }
+    async function loadHtmlFragment(htmlPath, container, scriptPath) { try { const response = await fetch(htmlPath + '?t=' + new Date().getTime()); if (!response.ok) throw new Error(`Could not load ${htmlPath}`); container.innerHTML = await response.text(); if (scriptPath) { const script = document.createElement('script'); script.src = scriptPath; script.onload = () => script.remove(); document.body.appendChild(script); } } catch (error) { container.innerHTML = `<div class="alert alert-danger">Failed to load content.</div>`; } }
+    function escapeHtml(str) { if (str === null || typeof str === 'undefined') return ''; return str.toString().replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));}
+    function stripHtml(html) { if (!html) return ""; let doc = new DOMParser().parseFromString(html, 'text/html'); return doc.body.textContent || "";}
+    function formatBytes(bytes, decimals = 2) { if (bytes === 0) return '0 Bytes'; const k = 1024; const i = Math.floor(Math.log(bytes) / Math.log(k)); return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals < 0 ? 0 : decimals))} ${['Bytes', 'KB', 'MB', 'GB', 'TB'][i]}`; }
+    function formatDateTime(iso) { if (!iso) return ''; return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }); }
+    function formatRelativeTime(iso) { if (!iso) return ''; const dt = new Date(iso), now = new Date(), diff = Math.round((now - dt) / 1000); if (diff < 60) return 'now'; if (diff < 3600) return `${Math.floor(diff / 60)}m ago`; if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`; return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); }
 
+    // --- START THE APP ---
+    initializeApp();
 
-    // --- ALL OTHER PAGE-SPECIFIC FUNCTIONS ---
-    async function handleSearch(searchTerm) {
-        if (searchTerm.length === 0) {
-            fetchAndRenderFolder(currentFolder);
-        } else if (searchTerm.length >= 2) {
-            mainPaneTitle.textContent = `Search results for: "${searchTerm}"`;
-            mainPaneContent.innerHTML = renderSpinner();
-            try {
-                const encodedTerm = encodeURIComponent(searchTerm);
-                const response = await fetchWithAuth(`/api/messaging/search?q=${encodedTerm}`);
-                if (!response.ok) throw new Error('Search failed');
-                const results = await response.json();
-                renderMessageList(results, true);
-            } catch (error) {
-                console.error("Search error:", error);
-                mainPaneContent.innerHTML = `<div class="alert alert-danger">Search request failed.</div>`;
-            }
-        }
-    }
-
-    async function handleMessageClick(event) {
-        event.preventDefault();
-        const messageListItem = event.currentTarget;
-        const messageId = messageListItem.dataset.messageId;
-        const clickedMessage = messageList.find(m => m.id === messageId);
-        if (clickedMessage) {
-            activeMessage = clickedMessage;
-            try {
-                const isUnread = clickedMessage.read_at === null;
-                if (isUnread) {
-                    await fetchWithAuth(`/api/messaging/threads/${clickedMessage.thread_id}`);
-                    messageListItem.querySelectorAll('.fw-bold').forEach(el => el.classList.remove('fw-bold'));
-                    const indicator = messageListItem.querySelector('.unread-indicator');
-
-                    if (indicator) indicator.classList.remove('unread');
-                    clickedMessage.read_at = new Date().toISOString();
-                    await fetchAndUpdateUnreadCount();
-                }
-            } catch (error) { console.error("Failed to mark message as read:", error); }
-            renderMessageDetail(activeMessage);
-        }
-    }
-
-    async function handleMarkAllRead() {
-        if (confirm('Are you sure you want to mark all messages as read?')) {
-            markAllReadBtn.disabled = true;
-            markAllReadBtn.textContent = 'Marking...';
-            try {
-                const response = await fetchWithAuth('/api/messaging/inbox/mark-all-as-read', { method: 'POST' });
-                if (!response.ok) throw new Error('Failed to mark all messages as read.');
-                await fetchAndRenderFolder('inbox');
-            } catch (error) {
-                console.error("Mark all as read error:", error);
-                alert("An error occurred. Please try again.");
-            } finally {
-                markAllReadBtn.disabled = false;
-                markAllReadBtn.textContent = 'Mark all as read';
-            }
-        }
-    }
-
-    async function handleDeleteClick() {
-        if (!activeMessage || !confirm('Are you sure you want to delete this message?')) return;
-        try {
-            const response = await fetchWithAuth(`/api/messaging/${activeMessage.id}`, { method: 'DELETE' });
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Failed to delete message.');
-            }
-            alert('Message deleted successfully.');
-            await fetchAndRenderFolder(currentFolder);
-        } catch (error) {
-            console.error('Delete error:', error);
-            alert(`Error: ${error.message}`);
-        }
-    }
-
-    async function handleDownloadClick(event) {
-        const button = event.currentTarget;
-        const fileId = button.dataset.fileId;
-        const filename = button.dataset.filename;
-
-        button.disabled = true;
-        button.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Downloading...`;
-
-        try {
-            const response = await fetchWithAuth(`/api/files/download/${fileId}`);
-            if (!response.ok) {
-                throw new Error('Download failed. You may not have permission or the file is missing.');
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-
-        } catch (error) {
-            console.error("Download error:", error);
-            alert(`Error: ${error.message}`);
-        } finally {
-            button.disabled = false;
-            button.innerHTML = `<i class="icon-paper-clip me-2"></i>${escapeHtml(filename)}`;
-        }
-    }
-
-    // --- RENDERING & UTILITY FUNCTIONS ---
-    function renderMessageList(messages, isSearchResult = false) {
-        if (!messages || messages.length === 0) {
-            mainPaneContent.innerHTML = '<p class="text-center text-muted mt-5">No messages found.</p>';
-            return;
-        }
-        const messageListHtml = messages.map(msg => {
-            const isUnread = !isSearchResult && currentFolder === 'inbox' && msg.read_at === null;
-            const otherParty = msg.sender.id === currentUser.id 
-                ? `To: ${escapeHtml(msg.receiver.user_name || msg.receiver.email)}`
-                : `From: ${escapeHtml(msg.sender.user_name)} (${escapeHtml(msg.sender.email)})`;
-            return `
-            <a href="#" class="list-group-item list-group-item-action message-item d-flex align-items-center" data-message-id="${msg.id}">
-                <span class="unread-indicator ${isUnread ? 'unread' : ''}"></span>
-                <div class="w-100">
-                    <div class="d-flex w-100 justify-content-between">
-                        <p class="mb-1 ${isUnread ? 'fw-bold' : ''}">${otherParty}</p>
-                        <small class="${isUnread ? 'fw-bold' : 'text-muted'} text-nowrap">${formatRelativeTime(msg.sent_at)}</small>
-                    </div>
-                    <h6 class="mb-1 ${isUnread ? 'fw-bold' : ''}">${escapeHtml(msg.subject || '(no subject)')}</h6>
-                    <p class="mb-1 text-muted text-truncate">${stripHtml(msg.content)}</p>
-                </div>
-            </a>`;
-        }).join('');
-        mainPaneContent.innerHTML = `<div class="list-group list-group-flush">${messageListHtml}</div>`;
-        document.querySelectorAll('.message-item').forEach(item => item.addEventListener('click', handleMessageClick));
-    }
-
-    function renderMessageDetail(message) {
-        mainPaneTitle.textContent = `Subject: ${escapeHtml(message.subject || '(no subject)')}`;
-        const from = `<strong>From:</strong> ${escapeHtml(message.sender.user_name)} &lt;${escapeHtml(message.sender.email)}&gt;`;
-        const to = `<strong>To:</strong> ${escapeHtml(message.receiver.user_name || message.receiver.email)}`;
-        const sent = `<strong>Sent:</strong> ${formatDateTime(message.sent_at)}`;
-        let detailHtml = `
-            <div class="p-3 border-bottom">
-                <p class="mb-1">${from}</p>
-                <p class="mb-1">${to}</p>
-                <p class="mb-0 text-muted">${sent}</p>
-            </div>
-            <div class="p-3 message-content-body">
-                ${message.content}
-            </div>
-        `;
-        let attachmentsHtml = '';
-        if (message.attachments && message.attachments.length > 0) {
-            attachmentsHtml += '<hr><div class="p-3"><h6 class="mb-2">Attachments:</h6><ul class="list-unstyled mb-0">';
-            message.attachments.forEach(file => {
-                attachmentsHtml += `
-                    <button class="btn btn-link text-decoration-none p-0 download-btn" 
-                            data-file-id="${file.id}" 
-                            data-filename="${file.original_filename}">
-                        <i class="icon-paper-clip me-2"></i>${escapeHtml(file.original_filename)}
-                    </button>
-                    <span class="text-muted ms-2">(${formatBytes(file.filesize_bytes)})</span>
-                `;
-            });
-            attachmentsHtml += '</ul></div>';
-        }
-        mainPaneContent.innerHTML = detailHtml + attachmentsHtml;
-        mainPaneContent.querySelectorAll('.download-btn').forEach(button => {
-            button.addEventListener('click', handleDownloadClick);
-        });
-        updateButtonVisibility(true);
-    }
-
-    function updateButtonVisibility(isViewingMessage) {
-        replyButton.style.display = isViewingMessage ? 'inline-block' : 'none';
-        deleteButton.style.display = isViewingMessage ? 'inline-block' : 'none';
-        addContactButton.style.display = currentFolder === 'contacts' ? 'inline-block' : 'none';
-        composeButton.style.display = 'inline-block';
-    }
-
-    function renderSpinner() { return `<div class="text-center p-5"><div class="spinner-border" role="status"></div></div>`; }
-
-    async function loadHtmlFragment(htmlPath, container, scriptPath) {
-        try {
-            container.innerHTML = renderSpinner();
-            // Build an absolute URL to prevent mixed content errors
-            const absoluteUrl = location.origin + htmlPath + '?t=' + new Date().getTime();
-            const response = await fetch(absoluteUrl);
-            if (!response.ok) throw new Error(`Could not load ${htmlPath}`);
-            container.innerHTML = await response.text();
-
-            if (scriptPath) {
-                const script = document.createElement('script');
-                script.src = scriptPath;
-                script.onload = () => { script.remove(); };
-                document.body.appendChild(script);
-            }
-        } catch (error) {
-            console.error("Error loading HTML fragment:", error);
-            container.innerHTML = `<div class="alert alert-danger">Failed to load content.</div>`;
-        }
-    }
-
-    // --- Run Initialization ---
-    initializePage();
-});
+})();

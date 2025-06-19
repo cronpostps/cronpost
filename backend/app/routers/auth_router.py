@@ -1,8 +1,7 @@
 # backend/app/routers/auth_router.py
-# Version: 3.0.2
+# Version: 3.1.0
 # Changelog:
-# - Added py-user-agents to parse device_os from user-agent string on login.
-# - Added login history logging for Google OAuth sign-ins.
+# - Added logic to auto-update the contacts table upon new user registration.
 
 import os
 import logging
@@ -33,9 +32,10 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ..db.database import get_db_session
-from ..db.models import User, EmailConfirmation, UserAccountStatusEnum, LoginHistory
+from ..db.models import User, EmailConfirmation, UserAccountStatusEnum, LoginHistory, Contact # {* MODIFIED *}
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import update # {* MODIFIED *}
 from sqlalchemy.exc import IntegrityError
 
 from ..services.captcha_service import verify_turnstile_captcha
@@ -121,6 +121,25 @@ async def dispatch_send_google_welcome_email(email:str,name:Optional[str],pw:str
     bg.add_task(send_email_async, email_subject, email, template_body, "google_welcome.html")
     logger.info(f"Dispatched 'welcome_google' for {email}.")
 
+# --- {* NEW LOGIC *} ---
+async def update_contacts_on_registration(db_session: AsyncSession, new_user: User):
+    """
+    Finds all entries in the contacts table with the new user's email
+    and updates them to reflect that they are now a CronPost user.
+    """
+    try:
+        stmt = (
+            update(Contact)
+            .where(Contact.contact_email == new_user.email)
+            .values(is_cronpost_user=True, contact_user_id=new_user.id)
+        )
+        result = await db_session.execute(stmt)
+        await db_session.commit()
+        logger.info(f"Updated {result.rowcount} contact entries for new user {new_user.email}.")
+    except Exception as e:
+        logger.error(f"Failed to update contacts table for new user {new_user.email}: {e}", exc_info=True)
+        await db_session.rollback()
+
 
 # --- Endpoints ---
 
@@ -135,45 +154,38 @@ async def signup_user_endpoint(ud:UserCreateRequest,request:FastAPIRequest,bg:Ba
     
     user_for_response =(await db.execute(select(User).filter_by(email=ud.email))).scalars().first()
     transaction_message = ""
+    is_new_user = False # Flag to check if we should update contacts
 
     if user_for_response and user_for_response.is_confirmed_by_email:
         raise HTTPException(status.HTTP_409_CONFLICT,"Email already registered and confirmed.")
     
-    # --- KHỐI LOGIC ĐÃ ĐƯỢC SỬA ---
     if user_for_response:
-        # User đã tồn tại nhưng chưa xác nhận, cập nhật timezone và gửi lại email
         logger.info(f"Account for {ud.email} exists but is unconfirmed. Updating timezone and resending confirmation.")
         
-        valid_timezone = user_for_response.timezone # Giữ lại timezone cũ làm mặc định
+        valid_timezone = user_for_response.timezone
         if ud.timezone:
             try:
                 pytz.timezone(ud.timezone)
                 valid_timezone = ud.timezone
-                logger.info(f"Updating existing unconfirmed user with new timezone: {valid_timezone}")
             except pytz.UnknownTimeZoneError:
                 logger.warning(f"Received unknown timezone '{ud.timezone}'. Keeping existing timezone '{valid_timezone}'.")
         
-        user_for_response.timezone = valid_timezone # CẬP NHẬT TIMEZONE CHO USER HIỆN TẠI
-        
+        user_for_response.timezone = valid_timezone
         await create_and_dispatch_confirmation_email_payload(db,user_for_response,bg,is_resend=True)
         transaction_message="Account exists but unconfirmed. Timezone updated and a new confirmation email has been sent."
-    # --- KẾT THÚC KHỐI LOGIC ĐÃ SỬA ---
     else:
-        # Tạo user hoàn toàn mới
         valid_timezone = 'Etc/UTC'
         if ud.timezone:
             try:
                 pytz.timezone(ud.timezone)
                 valid_timezone = ud.timezone
-                logger.info(f"Received and validated timezone '{valid_timezone}' for new user {ud.email}.")
             except pytz.UnknownTimeZoneError:
-                logger.warning(f"Received unknown timezone '{ud.timezone}' for new user {ud.email}. Defaulting to UTC.")
+                logger.warning(f"Received unknown timezone '{ud.timezone}'. Defaulting to UTC.")
         
-        email_prefix = ud.email.split('@')[0]
         new_user_obj=User(
             email=ud.email, 
             password_hash=hash_password(ud.password), 
-            user_name=email_prefix, 
+            user_name=ud.email.split('@')[0], 
             provider='email',
             timezone=valid_timezone
         )
@@ -182,6 +194,7 @@ async def signup_user_endpoint(ud:UserCreateRequest,request:FastAPIRequest,bg:Ba
             await db.flush()
             await create_and_dispatch_confirmation_email_payload(db,new_user_obj,bg)
             user_for_response = new_user_obj
+            is_new_user = True # It's a new user
             transaction_message="Registration successful. Please check your email to verify your account."
         except IntegrityError:
             await db.rollback()
@@ -189,10 +202,15 @@ async def signup_user_endpoint(ud:UserCreateRequest,request:FastAPIRequest,bg:Ba
     
     if not user_for_response:
         await db.rollback()
-        raise HTTPException(status_code=500,detail="User processing error, user object is None before commit.")
+        raise HTTPException(status_code=500,detail="User processing error.")
 
     await db.commit()
     await db.refresh(user_for_response)
+    
+    # --- {* NEW LOGIC *} ---
+    # If a new user was created, update the contacts table in the background.
+    if is_new_user:
+        bg.add_task(update_contacts_on_registration, db, user_for_response)
     
     return UserResponse(id=user_for_response.id,email=user_for_response.email,message=transaction_message)
 
@@ -203,14 +221,7 @@ async def confirm_email_endpoint(token: str, db_session: AsyncSession = Depends(
         token_data = confirmation_serializer.loads(token, salt=EMAIL_CONFIRMATION_SALT, max_age=EMAIL_CONFIRMATION_TOKEN_LIFESPAN_HOURS * 3600)
         user_id = uuid.UUID(token_data["user_id"])
         redirect_email_param = token_data.get("email", "")
-    except SignatureExpired:
-        try:
-            expired_token_data = confirmation_serializer.loads(token, salt=EMAIL_CONFIRMATION_SALT, max_age=-1)
-            expired_email_for_redirect = expired_token_data.get('email','')
-        except BadTimeSignature:
-            expired_email_for_redirect = ""
-        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmation_expired&email={expired_email_for_redirect}")
-    except BadTimeSignature:
+    except (SignatureExpired, BadTimeSignature):
         return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=email_confirmation_invalid")
     
     confirmation_record = (await db_session.execute(select(EmailConfirmation).filter_by(confirmation_token=token, user_id=user_id, email=redirect_email_param))).scalars().first()
@@ -242,80 +253,55 @@ async def resend_confirmation_email_endpoint(request_data:ResendConfirmationRequ
         msg,http_stat="This email address has already been confirmed.",status.HTTP_200_OK
     return JSONResponse(status_code=http_stat,content={"message":msg})
 
-# --- GOOGLE OAUTH ENDPOINTS (LOGIC FROM V2.6.10) ---
+# --- GOOGLE OAUTH ENDPOINTS ---
 @router.get("/google")
 @limiter.limit("10/minute")
 async def google_oauth_login(request: FastAPIRequest):
     if not all([GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI_FROM_ENV]):
         raise HTTPException(status_code=500, detail="Google OAuth is not configured on the server.")
         
-    # Create OAuth2 client without server metadata loading
     oauth_client = AsyncOAuth2Client(
-        client_id=GOOGLE_CLIENT_ID,
-        client_secret=GOOGLE_CLIENT_SECRET,
-        redirect_uri=GOOGLE_REDIRECT_URI_FROM_ENV,
-        scope='openid profile email'
+        client_id=GOOGLE_CLIENT_ID, client_secret=GOOGLE_CLIENT_SECRET,
+        redirect_uri=GOOGLE_REDIRECT_URI_FROM_ENV, scope='openid profile email'
     )
-
-    # Use Google's authorization endpoint directly
     authorization_endpoint = 'https://accounts.google.com/o/oauth2/v2/auth'
-    
     code_verifier = generate_token(48)
     request.session['google_oauth_code_verifier'] = code_verifier
     code_challenge = create_s256_code_challenge(code_verifier)
     request.session['google_oauth_state'] = secrets.token_urlsafe(32)
     
     auth_url, _ = oauth_client.create_authorization_url(
-        url=authorization_endpoint,
-        state=request.session['google_oauth_state'],
-        code_challenge=code_challenge,
-        code_challenge_method='S256',
-        access_type="offline",
-        prompt="consent"
+        url=authorization_endpoint, state=request.session['google_oauth_state'],
+        code_challenge=code_challenge, code_challenge_method='S256',
+        access_type="offline", prompt="consent"
     )
     return RedirectResponse(auth_url)
 
 @router.get("/google/callback", include_in_schema=False)
 async def google_oauth_callback(
-    request: FastAPIRequest,
-    background_tasks: BackgroundTasks,
+    request: FastAPIRequest, background_tasks: BackgroundTasks,
     db_session: AsyncSession = Depends(get_db_session)
 ):
     if 'error' in request.query_params:
-        return RedirectResponse(
-            url=f"{FRONTEND_BASE_URL}/signin?status=google_oauth_error&detail={request.query_params.get('error_description','Unknown Error')}"
-        )
+        return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=google_oauth_error&detail={request.query_params.get('error_description','Unknown Error')}")
     
     state = request.query_params.get('state')
     if not state or state != request.session.pop('google_oauth_state', None):
         return RedirectResponse(url=f"{FRONTEND_BASE_URL}/signin?status=google_oauth_state_mismatch")
 
-    oauth_client = AsyncOAuth2Client(
-        client_id=GOOGLE_CLIENT_ID,
-        client_secret=GOOGLE_CLIENT_SECRET,
-        redirect_uri=GOOGLE_REDIRECT_URI_FROM_ENV
-    )
+    oauth_client = AsyncOAuth2Client(client_id=GOOGLE_CLIENT_ID, client_secret=GOOGLE_CLIENT_SECRET, redirect_uri=GOOGLE_REDIRECT_URI_FROM_ENV)
 
     try:
         code_verifier = request.session.pop('google_oauth_code_verifier', None)
-        token_response = await oauth_client.fetch_token(
-            'https://oauth2.googleapis.com/token',
-            code=request.query_params.get('code'),
-            code_verifier=code_verifier
-        )
+        token_response = await oauth_client.fetch_token('https://oauth2.googleapis.com/token', code=request.query_params.get('code'), code_verifier=code_verifier)
         
         async with httpx.AsyncClient() as client:
             jwks_response = await client.get('https://www.googleapis.com/oauth2/v3/certs')
             jwk_set = JsonWebKey.import_key_set(jwks_response.json())
         
         user_claims = authlib_jwt.decode(
-            token_response['id_token'],
-            jwk_set,
-            claims_cls=CodeIDToken,
-            claims_options={
-                "iss": {"essential": True, "value": "https://accounts.google.com"},
-                "aud": {"essential": True, "value": GOOGLE_CLIENT_ID}
-            }
+            token_response['id_token'], jwk_set, claims_cls=CodeIDToken,
+            claims_options={"iss": {"essential": True, "value": "https://accounts.google.com"}, "aud": {"essential": True, "value": GOOGLE_CLIENT_ID}}
         )
         user_claims.validate()
     except Exception as e:
@@ -328,64 +314,47 @@ async def google_oauth_callback(
 
     user = (await db_session.execute(select(User).filter_by(email=google_email))).scalars().first()
     
-    # Mặc định là đăng nhập thành công
     status_param = "google_signin_success"
+    is_new_user = False
 
     if not user:
-        # User mới, tạo tài khoản và đặt status để chuyển hướng đến trang hoàn tất hồ sơ
+        is_new_user = True
         random_pw = generate_random_password(12)
         user = User(
-            email=google_email, 
-            password_hash=hash_password(random_pw), 
-            google_id=user_claims.get("sub"),
-            user_name=user_claims.get("name"), 
-            is_confirmed_by_email=True, # Email từ Google được coi là đã xác thực
-            provider='google',
-            timezone='Etc/UTC' # Sẽ được cập nhật ở bước sau
+            email=google_email, password_hash=hash_password(random_pw),
+            google_id=user_claims.get("sub"), user_name=user_claims.get("name"), 
+            is_confirmed_by_email=True, provider='google', timezone='Etc/UTC'
         )
         db_session.add(user)
-        status_param = "google_signup_success_new_user" # Status mới cho người dùng mới
+        status_param = "google_signup_success_new_user"
         await dispatch_send_google_welcome_email(google_email, user.user_name, random_pw, background_tasks)
-        
-        # --- THÊM VÀO ĐỂ SỬA LỖI ---
-        # Đẩy session vào DB để user mới nhận được ID trước khi tạo LoginHistory
         await db_session.flush()
-        await db_session.refresh(user)
-        # ---------------------------
         
     elif not user.google_id:
-        # User đã tồn tại với email/password, liên kết tài khoản Google
         user.google_id = user_claims.get("sub")
         user.is_confirmed_by_email = True
         user.user_name = user_claims.get("name") or user.user_name
         status_param = "google_link_success"
 
-    # Ghi lại lịch sử đăng nhập
     user.last_activity_at = datetime.now(dt_timezone.utc)
     user_agent_string = request.headers.get("user-agent")
     device_os_info = parse(user_agent_string).os.family if user_agent_string else None
     
-    db_session.add(LoginHistory(
-        user_id=user.id,
-        ip_address=request.client.host,
-        user_agent=user_agent_string,
-        device_os=device_os_info
-    ))
+    db_session.add(LoginHistory(user_id=user.id, ip_address=request.client.host, user_agent=user_agent_string, device_os=device_os_info))
     
     await db_session.commit()
     await db_session.refresh(user)
     
-    # Tạo access token
+    # --- {* NEW LOGIC *} ---
+    # If a new user was created via Google, update the contacts table.
+    if is_new_user:
+        background_tasks.add_task(update_contacts_on_registration, db_session, user)
+
     access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "provider": "google"})
     
-    # --- LOGIC CHUYỂN HƯỚNG MỚI ---
-    # Nếu là người dùng mới, chuyển đến trang hoàn tất hồ sơ
     if status_param == "google_signup_success_new_user":
-        logger.info(f"New Google user {user.email}. Redirecting to complete profile page.")
         redirect_url = f"{FRONTEND_BASE_URL}/complete-profile?token={access_token}"
     else:
-        # Nếu là người dùng cũ, vào thẳng dashboard
         redirect_url = f"{FRONTEND_BASE_URL}/dashboard?token={access_token}&status={status_param}&email={user.email}"
     
-    response = RedirectResponse(url=redirect_url)
-    return response
+    return RedirectResponse(url=redirect_url)

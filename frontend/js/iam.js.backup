@@ -1,0 +1,402 @@
+// /frontend/js/iam.js
+// Version 8.1.0 - Restored unread count badge and indicator dots.
+
+(function() {
+    // --- STATE MANAGEMENT ---
+    let currentUser = null;
+    let currentView = {
+        folder: 'inbox',
+        messageId: null,
+        searchTerm: ''
+    };
+    let messageCache = {};
+
+    // --- DOM Elements ---
+    const contentPane = document.getElementById('iam-content-pane');
+    const navTabs = document.querySelectorAll('#iam-nav-tabs .nav-link');
+    const composeBtn = document.getElementById('iam-compose-btn');
+    const searchInput = document.getElementById('iam-search-input');
+    const searchBtn = document.getElementById('iam-search-btn');
+    const searchSection = document.getElementById('iam-search-section');
+    const spinner = document.getElementById('iam-loading-spinner');
+    const inboxBadge = document.getElementById('iam-inbox-unread-count'); // New element
+
+    /**
+     * Main Initialization
+     */
+    async function initializeApp() {
+        try {
+            const response = await fetchWithAuth('/api/users/me');
+            if (!response.ok) throw new Error("Failed to fetch user data.");
+            currentUser = await response.json();
+
+            if (typeof EditorManager !== 'undefined') {
+                EditorManager.init(currentUser);
+            }
+        } catch (error) {
+            console.error("Initialization failed:", error);
+            contentPane.innerHTML = `<div class="alert alert-danger">Error loading page. Please try again later.</div>`;
+            return;
+        }
+
+        setupEventListeners();
+        await renderCurrentView();
+        await fetchAndUpdateInboxBadge(); // Fetch count on initial load
+    }
+
+    /**
+     * Setup Event Listeners
+     */
+    function setupEventListeners() {
+        navTabs.forEach(tab => tab.addEventListener('click', handleNavClick));
+        if (composeBtn) composeBtn.addEventListener('click', handleComposeClick);
+        if (searchBtn) searchBtn.addEventListener('click', handleSearch);
+        if (searchInput) searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
+        if (contentPane) contentPane.addEventListener('click', handleContentPaneClick);
+    }
+
+    async function renderCurrentView() {
+        showSpinner();
+        if (currentView.messageId) {
+            await renderMessageDetail(currentView.messageId);
+        } else {
+            switch (currentView.folder) {
+                case 'inbox':
+                case 'sent':
+                    await renderMessageList(currentView.folder);
+                    break;
+                case 'search':
+                    await renderSearchResults(currentView.searchTerm);
+                    break;
+                case 'contacts':
+                    await renderContactsView();
+                    break;
+                default:
+                    contentPane.innerHTML = '<p class="text-center p-5">Select a folder to view.</p>';
+            }
+        }
+        hideSpinner();
+    }
+
+    // --- VIEW RENDERING FUNCTIONS ---
+
+    async function renderMessageList(folder) {
+        try {
+            if (folder !== 'inbox' && messageCache[folder]) {
+                // use cache
+            } else {
+                const response = await fetchWithAuth(`/api/messaging/${folder}`);
+                if (!response.ok) throw new Error(`Failed to fetch ${folder}.`);
+                messageCache[folder] = await response.json();
+            }
+            const messages = messageCache[folder];
+
+            if (messages.length === 0) {
+                contentPane.innerHTML = `<div class="text-center p-5 text-muted">Your ${folder} is empty.</div>`;
+                return;
+            }
+
+            const rowsHtml = messages.map(msg => {
+                const isUnread = folder === 'inbox' && msg.read_at === null;
+                
+                // {* LOGIC TO FORMAT SENDER/RECEIVER DISPLAY *}
+                let otherPartyDisplay = '';
+                if (msg.sender.id === currentUser.id) { // Message sent by current user
+                    const receiverName = escapeHtml(msg.receiver.user_name);
+                    const receiverEmail = escapeHtml(msg.receiver.email);
+                    otherPartyDisplay = `To: ${receiverName ? `${receiverName} (${receiverEmail})` : receiverEmail}`;
+                } else { // Message received by current user
+                    const senderName = escapeHtml(msg.sender.user_name);
+                    const senderEmail = escapeHtml(msg.sender.email);
+                    otherPartyDisplay = `From: ${senderName ? `${senderName} (${senderEmail})` : senderEmail}`;
+                }
+
+                return `
+                <a href="#" class="list-group-item list-group-item-action message-item d-flex align-items-center" data-message-id="${msg.id}" data-thread-id="${msg.thread_id}">
+                    <span class="unread-indicator ${isUnread ? 'unread' : ''}"></span>
+                    <div class="flex-grow-1">
+                        <div class="d-flex w-100 justify-content-between">
+                            <p class="mb-1 ${isUnread ? 'fw-bold' : ''}">${otherPartyDisplay}</p>
+                            <small class="${isUnread ? 'text-primary fw-bold' : 'text-muted'}">${formatRelativeTime(msg.sent_at)}</small>
+                        </div>
+                        <h6 class="mb-1 ${isUnread ? 'fw-bold' : ''}">${escapeHtml(msg.subject || '(no subject)')}</h6>
+                        <p class="mb-1 text-muted text-truncate">${stripHtml(msg.content)}</p>
+                    </div>
+                </a>`;
+            }).join('');
+            contentPane.innerHTML = `<div class="list-group list-group-flush">${rowsHtml}</div>`;
+
+        } catch (error) {
+            contentPane.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+        }
+    }
+
+    async function renderMessageDetail(messageId) {
+        const message = findMessageInCache(messageId);
+        if (!message) {
+            contentPane.innerHTML = `<div class="alert alert-danger">Message not found.</div>`;
+            return;
+        }
+
+        if (currentView.folder === 'inbox' && message.read_at === null) {
+            try {
+                await fetchWithAuth(`/api/messaging/threads/${message.thread_id}`);
+                message.read_at = new Date().toISOString();
+                delete messageCache['inbox'];
+                await fetchAndUpdateInboxBadge();
+            } catch (e) { console.error("Failed to mark thread as read", e); }
+        }
+
+        let attachmentsHtml = '';
+        if (message.attachments && message.attachments.length > 0) {
+            attachmentsHtml += '<hr><div class="p-3"><h6 class="mb-2">Attachments:</h6>';
+            attachmentsHtml += message.attachments.map(file => `
+                <div>
+                    <a href="#" class="download-attachment" data-file-id="${file.id}" data-filename="${escapeHtml(file.original_filename)}">
+                        ${escapeHtml(file.original_filename)}
+                    </a> <span class="text-muted ms-2">(${formatBytes(file.filesize_bytes)})</span>
+                </div>`).join('');
+            attachmentsHtml += '</div>';
+        }
+        
+        // {* NEW LOGIC for formatting sender/receiver display *}
+        const fromName = escapeHtml(message.sender.user_name);
+        const fromEmail = escapeHtml(message.sender.email);
+        const fromDisplay = fromName ? `${fromName} (${fromEmail})` : fromEmail;
+
+        const toName = escapeHtml(message.receiver.user_name);
+        const toEmail = escapeHtml(message.receiver.email);
+        const toDisplay = toName ? `${toName} (${toEmail})` : toEmail;
+
+        const detailHtml = `
+            <div id="iam-message-detail-view">
+                <div class="p-3 border-bottom">
+                    <button class="btn btn-sm btn-outline-secondary" id="iam-back-btn">&larr; Back to ${currentView.folder}</button>
+                </div>
+                <div class="p-3">
+                    <h5>${escapeHtml(message.subject || '(no subject)')}</h5>
+                    <p class="mb-1"><strong>From:</strong> ${fromDisplay}</p>
+                    <p class="mb-1"><strong>To:</strong> ${toDisplay}</p>
+                    <p class="text-muted"><strong>Sent:</strong> ${formatDateTime(message.sent_at)}</p>
+                </div>
+                <div class="message-body">${message.content}</div>
+                ${attachmentsHtml}
+            </div>`;
+        contentPane.innerHTML = detailHtml;
+    }
+
+    async function renderContactsView() {
+        await loadHtmlFragment('/contacts.html', contentPane, '/js/contacts.js');
+    }
+
+    async function renderSearchResults(term) {
+        if (!term) {
+            contentPane.innerHTML = '<p class="text-center p-5">Please enter a search term.</p>';
+            return;
+        }
+        try {
+            const response = await fetchWithAuth(`/api/messaging/search?q=${encodeURIComponent(term)}`);
+            if (!response.ok) throw new Error('Search request failed.');
+            const messages = await response.json();
+            
+            if (messages.length === 0) {
+                contentPane.innerHTML = `<div class="text-center p-5 text-muted">No results found for "<strong>${escapeHtml(term)}</strong>".</div>`;
+                return;
+            }
+            const header = `<div class="p-3 border-bottom">Search results for "<strong>${escapeHtml(term)}</strong>":</div>`;
+            const rowsHtml = messages.map(msg => `
+                <a href="#" class="list-group-item list-group-item-action message-item" data-message-id="${msg.id}" data-thread-id="${msg.thread_id}">
+                     <div class="d-flex w-100 justify-content-between">
+                        <p class="mb-1">From: ${escapeHtml(msg.sender.user_name || msg.sender.email)}</p>
+                        <small class="text-muted">${formatRelativeTime(msg.sent_at)}</small>
+                    </div>
+                    <h6 class="mb-1">${escapeHtml(msg.subject || '(no subject)')}</h6>
+                </a>`).join('');
+            contentPane.innerHTML = header + `<div class="list-group list-group-flush">${rowsHtml}</div>`;
+
+        } catch (error) {
+            contentPane.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+        }
+    }
+
+    // --- EVENT HANDLERS ---
+
+    function handleNavClick(event) {
+        const targetFolder = event.currentTarget.dataset.folder;
+        if (targetFolder === currentView.folder && currentView.messageId === null) return;
+        
+        if (searchSection) {
+            searchSection.style.display = (targetFolder === 'contacts') ? 'none' : 'block';
+        }
+
+        navTabs.forEach(tab => tab.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+
+        currentView.folder = targetFolder;
+        currentView.messageId = null;
+        currentView.searchTerm = '';
+        if(searchInput) searchInput.value = '';
+        
+        renderCurrentView();
+    }
+    
+    // ... (Các hàm handler khác giữ nguyên)
+
+    // --- UTILITY FUNCTIONS ---
+    
+    /**
+     * Fetches unread count and updates the badge in the Inbox tab.
+     */
+    async function fetchAndUpdateInboxBadge() {
+        if (!inboxBadge) return;
+        try {
+            const response = await fetchWithAuth('/api/messaging/unread-count');
+            if(response.ok) {
+                const data = await response.json();
+                const count = data.unread_count || 0;
+                if (count > 0) {
+                    inboxBadge.textContent = count > 99 ? '99+' : count;
+                    inboxBadge.style.display = 'inline-block';
+                } else {
+                    inboxBadge.style.display = 'none';
+                }
+            }
+        } catch(e) {
+            console.error("Failed to fetch unread count for badge.", e);
+            inboxBadge.style.display = 'none';
+        }
+    }
+
+    // ... (Các hàm utility khác giữ nguyên)
+    
+    // --- Các hàm handler và utility khác được giữ nguyên từ phiên bản trước ---
+    // (Bao gồm handleContentPaneClick, handleSearch, handleComposeClick, handleSendMessage, handleDownloadClick, và các utility khác)
+
+    async function handleContentPaneClick(event) {
+        const messageItem = event.target.closest('.message-item');
+        const backBtn = event.target.closest('#iam-back-btn');
+        const downloadLink = event.target.closest('.download-attachment');
+
+        if (messageItem) {
+            event.preventDefault();
+            const messageId = messageItem.dataset.messageId;
+            currentView.messageId = messageId;
+            await renderCurrentView();
+        } else if (backBtn) {
+            event.preventDefault();
+            currentView.messageId = null;
+            await renderCurrentView();
+        } else if (downloadLink) {
+            event.preventDefault();
+            await handleDownloadClick(downloadLink);
+        }
+    }
+
+    function handleSearch() {
+        const term = searchInput.value.trim();
+        if (!term) return;
+        navTabs.forEach(tab => tab.classList.remove('active'));
+        currentView.folder = 'search';
+        currentView.messageId = null;
+        currentView.searchTerm = term;
+        renderCurrentView();
+    }
+
+    function handleComposeClick() {
+        if (typeof EditorManager !== 'undefined') {
+            EditorManager.open({ onSend: handleSendMessage });
+        }
+    }
+    
+    async function handleSendMessage(data) {
+        if (!data.recipient || !data.content) {
+            alert('Recipient and message content are required.');
+            return { success: false };
+        }
+        try {
+            const payload = {
+                receiver_email: data.recipient,
+                subject: data.subject,
+                content: data.content,
+                attachment_file_ids: data.attachmentIds
+            };
+            const response = await fetchWithAuth('/api/messaging/send', {
+                method: 'POST', body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to send message.');
+            }
+            delete messageCache['sent'];
+            document.querySelector('#iam-nav-tabs .nav-link[data-folder="sent"]').click();
+            return { success: true };
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+            return { success: false };
+        }
+    }
+
+    async function handleDownloadClick(linkElement) {
+        const fileId = linkElement.dataset.fileId;
+        const filename = linkElement.dataset.filename;
+        const originalText = linkElement.innerHTML;
+        linkElement.innerHTML = 'Downloading...';
+        linkElement.style.pointerEvents = 'none';
+
+        try {
+            const response = await fetchWithAuth(`/api/files/download/${fileId}`);
+            if (!response.ok) throw new Error('Download failed.');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        } finally {
+            linkElement.innerHTML = originalText;
+            linkElement.style.pointerEvents = 'auto';
+        }
+    }
+
+    function showSpinner() { if(spinner) spinner.style.display = 'block'; contentPane.innerHTML = ''; }
+    function hideSpinner() { if(spinner) spinner.style.display = 'none'; }
+    function findMessageInCache(messageId) {
+        for (const folder in messageCache) {
+            const found = messageCache[folder]?.find(m => m.id === messageId);
+            if (found) return found;
+        }
+        return null;
+    }
+    async function loadHtmlFragment(htmlPath, container, scriptPath) {
+        try {
+            const response = await fetch(htmlPath + '?t=' + new Date().getTime());
+            if (!response.ok) throw new Error(`Could not load ${htmlPath}`);
+            container.innerHTML = await response.text();
+            if (scriptPath) {
+                const script = document.createElement('script');
+                script.src = scriptPath;
+                script.onload = () => script.remove();
+                document.body.appendChild(script);
+            }
+        } catch (error) {
+            container.innerHTML = `<div class="alert alert-danger">Failed to load content.</div>`;
+        }
+    }
+    function escapeHtml(str) { if (str === null || typeof str === 'undefined') return ''; return str.toString().replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));}
+    function stripHtml(html) { if (!html) return ""; let doc = new DOMParser().parseFromString(html, 'text/html'); return doc.body.textContent || "";}
+    function formatBytes(bytes, decimals = 2) { if (bytes === 0) return '0 Bytes'; const k = 1024; const i = Math.floor(Math.log(bytes) / Math.log(k)); return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals < 0 ? 0 : decimals))} ${['Bytes', 'KB', 'MB', 'GB', 'TB'][i]}`; }
+    function formatDateTime(iso) { if (!iso) return ''; return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }); }
+    function formatRelativeTime(iso) { if (!iso) return ''; const dt = new Date(iso), now = new Date(), diff = Math.round((now - dt) / 1000); if (diff < 60) return 'now'; if (diff < 3600) return `${Math.floor(diff / 60)}m ago`; if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`; return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); }
+
+    // --- START THE APP ---
+    initializeApp();
+
+})();
